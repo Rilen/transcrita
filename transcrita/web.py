@@ -6,6 +6,7 @@ import argparse
 import gc
 import json
 import logging
+import os
 import queue
 import tempfile
 import threading
@@ -334,8 +335,8 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Porta do servidor. Padrão: 8000",
+        default=int(os.environ.get("TRANSCRITA_PORT", 8765)),
+        help="Porta do servidor. Padrão: 8765 (variável TRANSCRITA_PORT)",
     )
     parser.add_argument(
         "--no-browser",

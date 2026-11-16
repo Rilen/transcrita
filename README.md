@@ -27,6 +27,23 @@ pip install -r requirements.txt
 python -m transcrita.cli <arquivo>
 ```
 
+## Uso rápido — `run.sh` (recomendado)
+
+Após `git clone` ou `git pull`, suba a aplicação em qualquer estação Linux/Fedora:
+
+```bash
+git clone https://github.com/Rilen/transcrita.git && cd transcrita
+./run.sh
+```
+
+Para atualizar depois:
+
+```bash
+git pull && ./run.sh
+```
+
+O servidor ficará disponível em `http://127.0.0.1:8765/` (variável `TRANSCRITA_PORT` para sobrescrever).
+
 ## Uso — CLI
 
 ```bash
@@ -58,14 +75,14 @@ Inicie o servidor local:
 transcrita-web
 ```
 
-O servidor fica disponível em `http://127.0.0.1:8000/` e o navegador é aberto automaticamente.
+O servidor fica disponível em `http://127.0.0.1:8765/` e o navegador é aberto automaticamente.
 
 ### Argumentos do servidor web
 
 | Argumento | Descrição | Padrão |
 |-----------|-----------|--------|
 | `--host` | Host do servidor | `127.0.0.1` |
-| `--port` | Porta do servidor | `8000` |
+| `--port` | Porta do servidor | `8765` |
 | `--no-browser` | Não abre o navegador automaticamente | false |
 
 A interface permite:
