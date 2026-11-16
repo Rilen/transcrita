@@ -26,7 +26,11 @@ from transcrita.srt import to_srt
 
 logger = logging.getLogger("transcrita.web")
 
-app = FastAPI(title="transcrita-web", version=__version__)
+app = FastAPI(
+    title="transcrita-web",
+    version=__version__,
+    root_path=os.environ.get("TRANSCRITA_ROOT_PATH", ""),
+)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -95,6 +99,12 @@ async def index() -> HTMLResponse:
     if not index_path.exists():
         raise HTTPException(status_code=404, detail="interface web não encontrada")
     return HTMLResponse(index_path.read_text(encoding="utf-8"))
+
+
+@app.get("/api/health")
+async def health() -> JSONResponse:
+    """Endpoint de saúde para checagem do proxy reverso."""
+    return JSONResponse({"status": "ok"})
 
 
 @app.post("/api/transcribe")
@@ -339,6 +349,11 @@ def main(argv: list[str] | None = None) -> None:
         help="Porta do servidor. Padrão: 8765 (variável TRANSCRITA_PORT)",
     )
     parser.add_argument(
+        "--root-path",
+        default=os.environ.get("TRANSCRITA_ROOT_PATH", ""),
+        help='Caminho base (root path) para deploy atrás de subpath, ex: /transcrita. Padrão: "" (variável TRANSCRITA_ROOT_PATH)',
+    )
+    parser.add_argument(
         "--no-browser",
         action="store_true",
         help="Não abre o navegador automaticamente.",
@@ -346,14 +361,20 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     if not args.no_browser:
-        url = f"http://{args.host}:{args.port}/"
+        url = f"http://{args.host}:{args.port}{args.root_path}/"
 
         def _open_browser() -> None:
             webbrowser.open(url)
 
         threading.Timer(1.0, _open_browser).start()
 
-    uvicorn.run(app, host=args.host, port=args.port)
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        proxy_headers=True,
+        forwarded_allow_ips="*",
+    )
 
 
 if __name__ == "__main__":

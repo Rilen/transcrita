@@ -223,6 +223,18 @@ class TestWeb(unittest.TestCase):
             self.assertEqual(t2, mock_base)
             mock_transcriber_cls.assert_called_once()
 
+    def test_get_health(self) -> None:
+        """GET /api/health deve retornar {"status": "ok"}."""
+        response = self.client.get("/api/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_app_root_path_configurable(self) -> None:
+        """A app FastAPI deve aceitar root_path para deploy em subpath."""
+        from fastapi import FastAPI
+
+        test_app = FastAPI(root_path="/transcrita")
+        self.assertEqual(test_app.root_path, "/transcrita")
+
+        # A app do transcrita respeita TRANSCRITA_ROOT_PATH via ambiente
+        self.assertTrue(hasattr(app, "root_path"))

@@ -42,7 +42,13 @@ Para atualizar depois:
 git pull && ./run.sh
 ```
 
-O servidor ficará disponível em `http://127.0.0.1:8765/` (variável `TRANSCRITA_PORT` para sobrescrever).
+O servidor ficará disponível em `http://127.0.0.1:8765/` (variáveis `TRANSCRITA_HOST`, `TRANSCRITA_PORT` e `TRANSCRITA_ROOT_PATH` para sobrescrever).
+
+Para usar em um subpath (ex: atrás de proxy reverso):
+
+```bash
+TRANSCRITA_HOST=0.0.0.0 TRANSCRITA_PORT=3005 TRANSCRITA_ROOT_PATH=/transcrita ./run.sh
+```
 
 ## Uso — CLI
 
@@ -83,7 +89,52 @@ O servidor fica disponível em `http://127.0.0.1:8765/` e o navegador é aberto 
 |-----------|-----------|--------|
 | `--host` | Host do servidor | `127.0.0.1` |
 | `--port` | Porta do servidor | `8765` |
+| `--root-path` | Caminho base para deploy atrás de subpath, ex: `/transcrita` | `""` |
 | `--no-browser` | Não abre o navegador automaticamente | false |
+
+### Deploy atrás de subpath reverso
+
+Para executar atrás de um proxy reverso (ex: Nginx/Caddy) em um subpath, defina `TRANSCRITA_ROOT_PATH`:
+
+```bash
+# Servidor 10.0.0.88, porta 3005, subpath /transcrita
+TRANSCRITA_HOST=0.0.0.0 TRANSCRITA_PORT=3005 TRANSCRITA_ROOT_PATH=/transcrita ./run.sh
+```
+
+A aplicação ficará disponível em `http://10.0.0.88:3005/transcrita/`.
+
+**Exemplo Nginx** (habilite `proxy_buffering off` para SSE em tempo real):
+
+```nginx
+location /transcrita/ {
+    proxy_pass http://127.0.0.1:3005/transcrita/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_buffering off;
+    proxy_cache off;
+}
+```
+
+**Exemplo Caddy**:
+
+```caddy
+10.0.0.88:3005
+
+handle_path /transcrita/* {
+    reverse_proxy http://127.0.0.1:3005/transcrita* {
+        header_up Host {upstream_hostport}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+    header /transcrita/* Cache-Control "no-cache"
+}
+```
 
 A interface permite:
 - Arraste e solte ou selecione um arquivo de áudio/vídeo.

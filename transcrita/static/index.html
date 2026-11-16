@@ -1353,7 +1353,7 @@
     formData.append('beam_size', document.getElementById('beamSizeInput').value);
     formData.append('vad', document.getElementById('vadCheckbox').checked ? 'true' : 'false');
 
-    const response = await fetch('/api/transcribe/stream', {
+    const response = await fetch('api/transcribe/stream', {
       method: 'POST',
       body: formData,
       signal: controller.signal,
