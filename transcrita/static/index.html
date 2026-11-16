@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>">
+<title>transcrita — Transcrição local de áudio e vídeo</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --fg: #0f172a;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --accent: #10b981;
+    --amber: #f59e0b;
+    --danger: #ef4444;
+    --muted: #64748b;
+    --success-bg: #f0fdf4;
+    --success-fg: #166534;
+    --error-bg: #fef2f2;
+    --error-fg: #991b1b;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+    --pending-bg: #f3f4f6;
+    --processing-bg: #eff6ff;
+    --done-bg: #f0fdf4;
+    --error-bg-item: #fef2f2;
+    --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
+  }
+
+  [data-theme="light"] {
+    --bg: #f8fafc;
+    --fg: #0f172a;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --accent: #10b981;
+    --amber: #f59e0b;
+    --danger: #ef4444;
+    --muted: #64748b;
+    --success-bg: #f0fdf4;
+    --success-fg: #166534;
+    --error-bg: #fef2f2;
+    --error-fg: #991b1b;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+    --pending-bg: #f3f4f6;
+    --processing-bg: #eff6ff;
+    --done-bg: #f0fdf4;
+    --error-bg-item: #fef2f2;
+  }
+
+  [data-theme="dark"] {
+    --bg: #0b0f17;
+    --fg: #f1f5f9;
+    --card: #111827;
+    --border: rgba(255,255,255,0.08);
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --accent: #10b981;
+    --amber: #f59e0b;
+    --danger: #ef4444;
+    --muted: #94a3b8;
+    --success-bg: #064e3b;
+    --success-fg: #86efac;
+    --error-bg: #450a0a;
+    --error-fg: #fca5a5;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.4);
+    --pending-bg: #334155;
+    --processing-bg: #1e3a8a;
+    --done-bg: #064e3b;
+    --error-bg-item: #450a0a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    line-height: 1.5;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    padding: 2rem 1.5rem;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  /* Tema toggle */
+  .theme-toggle {
+    position: absolute;
+    top: 1.5rem;
+    right: 1.5rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: var(--shadow);
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .theme-toggle:hover {
+    border-color: var(--primary);
+  }
+
+  header {
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  header p {
+    color: var(--muted);
+    font-size: 0.875rem;
+    margin-top: 6px;
+  }
+
+  .drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 24px;
+    text-align: center;
+    background: var(--card);
+    margin-bottom: 20px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    position: relative;
+    box-shadow: var(--shadow);
+  }
+
+  .drop-zone:hover {
+    border-color: var(--primary);
+    background: rgba(59, 130, 246, 0.04);
+  }
+
+  .drop-zone.drag-over {
+    border-color: var(--primary);
+    background: rgba(59, 130, 246, 0.12);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-zone .dz-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+  }
+
+  .drop-zone .dz-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .drop-zone .dz-hint {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+
+  /* Fila de arquivos */
+  .queue-list {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    padding: 8px;
+    box-shadow: var(--shadow);
+  }
+
+  .queue-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 0.65rem 0.85rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+    border: 1px solid transparent;
+    box-shadow: var(--shadow);
+  }
+
+  .queue-item:hover {
+    background: rgba(0,0,0,0.03);
+  }
+
+  .queue-item.selected {
+    border-color: var(--primary);
+    background: var(--processing-bg);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .queue-item.done {
+    border-color: var(--accent);
+    background: var(--done-bg);
+  }
+
+  .queue-item.error {
+    border-color: var(--danger);
+    background: var(--error-bg-item);
+  }
+
+  .queue-item .status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+
+  .queue-item.pending .status-indicator { background: var(--muted); }
+  .queue-item.processing .status-indicator { background: var(--amber); }
+  .queue-item.done .status-indicator { background: var(--accent); }
+  .queue-item.error .status-indicator { background: var(--danger); }
+
+  .queue-item .badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    margin-right: auto;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+  }
+
+  .queue-item .badge.pending { background: #e5e7eb; color: #374151; }
+  .queue-item .badge.processing { background: #dbeafe; color: #1e40af; }
+  .queue-item .badge.done { background: #dcfce7; color: #166534; }
+  .queue-item .badge.error { background: #fee2e2; color: #991b1b; }
+
+  [data-theme="dark"] .queue-item .badge.pending { background: #475569; color: #cbd5e1; }
+  [data-theme="dark"] .queue-item .badge.processing { background: #1e3a8a; color: #bfdbfe; }
+  [data-theme="dark"] .queue-item .badge.done { background: #064e3b; color: #86efac; }
+  [data-theme="dark"] .queue-item .badge.error { background: #450a0a; color: #fca5a5; }
+
+  .queue-item .file-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .queue-item .file-name {
+    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .queue-item .file-size {
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
+  }
+
+  .queue-item .file-actions {
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .queue-item:hover .file-actions,
+  .queue-item.done .file-actions,
+  .queue-item.error .file-actions {
+    opacity: 1;
+  }
+
+  .queue-item .btn-small {
+    padding: 5px 10px;
+    font-size: 0.75rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: var(--font-ui);
+  }
+
+  .queue-item .btn-small.download { background: var(--accent); color: #fff; }
+  .queue-item .btn-small.download:disabled { opacity: 0.5; cursor: not-allowed; }
+  .queue-item .btn-small.remove { background: transparent; color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
+  .queue-item .btn-small.remove:hover { background: rgba(239,68,68,0.08); }
+
+  .queue-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn-clear {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-family: var(--font-ui);
+  }
+
+  .btn-clear:hover { background: rgba(239,68,68,0.05); }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1.4fr 1.4fr 0.8fr auto;
+    gap: 12px;
+    margin-bottom: 20px;
+    align-items: end;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--fg);
+    font-family: var(--font-ui);
+  }
+
+  .field select,
+  .field input[type="number"] {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card);
+    color: var(--fg);
+    font-size: 0.9375rem;
+    font-family: var(--font-ui);
+  }
+
+  .field select {
+    min-width: 195px;
+  }
+
+  .field-checkbox {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s, transform 0.1s;
+    min-height: 44px;
+    font-family: var(--font-ui);
+  }
+
+  .btn:active { transform: translateY(0.5px); }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: rgba(0,0,0,0.03);
+  }
+
+  .btn-success {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .btn-success:hover:not(:disabled) {
+    background: #047857;
+  }
+
+  .btn-danger {
+    background: var(--danger);
+    color: #fff;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: #dc2626;
+  }
+
+  .btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .progress-card {
+    display: none;
+    gap: 12px;
+    padding: 20px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .progress-status {
+    font-size: 0.9375rem;
+    color: var(--fg);
+    font-weight: 600;
+    font-family: var(--font-ui);
+  }
+
+  .progress-pct {
+    font-size: 0.875rem;
+    color: var(--primary);
+    font-weight: 700;
+    min-width: 52px;
+    text-align: right;
+    font-family: var(--font-mono);
+  }
+
+  .progress-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--primary);
+    border-radius: 4px;
+    transition: width 0.25s ease;
+  }
+
+  .progress-time {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family: var(--font-mono);
+  }
+
+  .btn-cancel {
+    background: var(--danger);
+    color: #fff;
+  }
+
+  .btn-cancel:hover:not(:disabled) {
+    background: #dc2626;
+  }
+
+  .error {
+    display: none;
+    padding: 12px 16px;
+    background: var(--error-bg);
+    color: var(--error-fg);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.9375rem;
+    box-shadow: var(--shadow);
+  }
+
+  .error .btn-danger {
+    margin-top: 10px;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+  }
+
+  .results {
+    display: none;
+    gap: 16px;
+    flex-direction: column;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+    background: var(--card);
+    border-radius: 8px 8px 0 0;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .tab {
+    padding: 10px 18px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9375rem;
+    font-family: var(--font-ui);
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+  }
+
+  .tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    background: rgba(59,130,246,0.05);
+  }
+
+  .tab-content {
+    display: none;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    box-shadow: var(--shadow);
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+  .output-box {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 16px;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    min-height: 220px;
+    max-height: 460px;
+    overflow-y: auto;
+    line-height: 1.65;
+    outline: none;
+  }
+
+  .tab-srt .output-box {
+    font-family: var(--font-mono);
+  }
+
+  .output-footer {
+    padding: 6px 16px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    text-align: right;
+    font-family: var(--font-mono);
+  }
+
+  footer {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .hidden { display: none !important; }
+
+  .supported {
+    margin-top: 16px;
+    font-size: 0.8125rem;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  /* Scrollbar sutil */
+  .output-box::-webkit-scrollbar, .queue-list::-webkit-scrollbar {
+    width: 8px;
+  }
+  .output-box::-webkit-scrollbar-track, .queue-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .output-box::-webkit-scrollbar-thumb, .queue-list::-webkit-scrollbar-thumb {
+    background: rgba(0,0,0,0.15);
+    border-radius: 4px;
+  }
+  [data-theme="dark"] .output-box::-webkit-scrollbar-thumb,
+  [data-theme="dark"] .queue-list::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.12);
+  }
+</style>
+</head>
+<body>
+
+<button type="button" class="theme-toggle" id="themeToggle" aria-label="Alternar tema">
+  <span id="themeIcon">🌙</span>
+  <span id="themeLabel">Tema claro</span>
+</button>
+
+<header>
+  <h1>transcrita</h1>
+  <p>Transcrição local de áudio e vídeo em português</p>
+</header>
+
+<div class="drop-zone" id="dropZone">
+  <input type="file" id="fileInput" accept=".wav,.mp3,.m4a,.ogg,.flac,.aac,.mp4,.mkv,.mov,.avi,.webm,.flv,.wmv,.m4v" multiple>
+  <div class="dz-icon">
+    <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="23"/>
+      <line x1="8" y1="23" x2="16" y2="23"/>
+    </svg>
+  </div>
+  <div class="dz-title" id="dzTitle">Solte os arquivos aqui ou clique para selecionar</div>
+  <div class="dz-hint">Áudio ou v&iacute;deo &middot; v&aacute;rios arquivos permitidos</div>
+</div>
+
+<div class="queue-controls">
+  <button type="button" class="btn-clear" id="clearQueueBtn" title="Limpar lista">Limpar lista</button>
+</div>
+
+<div class="queue-list" id="queueList"></div>
+
+<div class="controls">
+  <div class="field">
+    <label>Modelo</label>
+    <select id="modelSelect">
+      <option value="tiny">tiny</option>
+      <option value="base" selected>base</option>
+      <option value="small">small</option>
+      <option value="medium">medium</option>
+      <option value="large-v3">large-v3</option>
+      <option value="large-v3-turbo">large-v3-turbo (r&aacute;pido e preciso)</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Idioma</label>
+    <select id="languageSelect">
+      <option value="pt" selected>Português Brasil (pt)</option>
+      <option value="en">Ingl&e;s (en)</option>
+      <option value="es">Espanhol (es)</option>
+      <option value="auto">Detectar automaticamente (auto)</option>
+    </select>
+  </div>
+  <div class="field">
+    <label>Beam Size</label>
+    <input type="number" id="beamSizeInput" value="5" min="1" max="10">
+  </div>
+  <div class="field field-checkbox">
+    <input type="checkbox" id="vadCheckbox">
+    <label for="vadCheckbox">Usar VAD</label>
+  </div>
+</div>
+
+<button type="button" class="btn btn-primary" id="transcribeBtn">Transcrever Fila</button>
+
+<div class="progress-card" id="progressCard">
+  <div class="progress-header">
+    <span class="progress-status" id="progressStatus">Iniciando&hellip;</span>
+    <span class="progress-pct" id="progressPct">0%</span>
+  </div>
+  <div class="progress-track">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+  <div class="progress-time" id="progressTime"></div>
+  <button type="button" class="btn btn-cancel" id="cancelBtn">Cancelar</button>
+</div>
+
+<div class="error" id="error">
+  <span id="errorMessage"></span>
+</div>
+
+<div class="results" id="results">
+  <div class="tabs">
+    <button type="button" class="tab active" data-tab="text">Texto</button>
+    <button type="button" class="tab" data-tab="srt">SRT</button>
+  </div>
+
+  <div class="tab-content active" id="tabText">
+    <div class="output-box" id="outputText"></div>
+    <div class="output-footer" id="outputTextFooter">0 palavras &middot; 0 caracteres</div>
+  </div>
+
+  <div class="tab-content" id="tabSrt">
+    <div class="output-box tab-srt" id="outputSrt"></div>
+    <div class="output-footer" id="outputSrtFooter">0 segmentos</div>
+  </div>
+
+  <div class="btn-group">
+    <button type="button" class="btn btn-secondary" id="copyBtn">Copiar</button>
+    <button type="button" class="btn btn-success" id="downloadTxtBtn">Baixar .txt</button>
+    <button type="button" class="btn btn-success" id="downloadSrtBtn">Baixar .srt</button>
+    <button type="button" class="btn btn-secondary" id="copyAllBtn" style="display:none">Copiar Tudo (.txt)</button>
+    <button type="button" class="btn btn-success" id="downloadAllBtn" style="display:none">Baixar Tudo (.txt)</button>
+  </div>
+</div>
+
+<footer>
+  transcrita &middot; processamento 100% local
+</footer>
+
+<div class="supported">
+  Formatos suportados: WAV, MP3, M4A, OGG, FLAC, AAC &middot; MP4, MKV, MOV, AVI, WEBM, FLV, WMV, M4V
+</div>
+
+<script>
+(function () {
+  const themeToggle = document.getElementById('themeToggle');
+  const themeIcon = document.getElementById('themeIcon');
+  const themeLabel = document.getElementById('themeLabel');
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const queueList = document.getElementById('queueList');
+  const clearQueueBtn = document.getElementById('clearQueueBtn');
+  const transcribeBtn = document.getElementById('transcribeBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const progressCard = document.getElementById('progressCard');
+  const progressBar = document.getElementById('progressBar');
+  const progressPct = document.getElementById('progressPct');
+  const progressStatus = document.getElementById('progressStatus');
+  const progressTime = document.getElementById('progressTime');
+  const error = document.getElementById('error');
+  const errorMessage = document.getElementById('errorMessage');
+  const results = document.getElementById('results');
+  const outputText = document.getElementById('outputText');
+  const outputTextFooter = document.getElementById('outputTextFooter');
+  const outputSrt = document.getElementById('outputSrt');
+  const outputSrtFooter = document.getElementById('outputSrtFooter');
+  const copyBtn = document.getElementById('copyBtn');
+  const downloadTxtBtn = document.getElementById('downloadTxtBtn');
+  const downloadSrtBtn = document.getElementById('downloadSrtBtn');
+  const copyAllBtn = document.getElementById('copyAllBtn');
+  const downloadAllBtn = document.getElementById('downloadAllBtn');
+  const tabs = document.querySelectorAll('.tab');
+
+  let queue = [];
+  let activeIndex = null;
+  let controller = null;
+  let isProcessing = false;
+
+  // Tema
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('transcrita-theme', theme);
+    const isDark = theme === 'dark';
+    themeIcon.textContent = isDark ? '☀️' : '🌙';
+    themeLabel.textContent = isDark ? 'Tema claro' : 'Tema escuro';
+  }
+
+  themeToggle.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+  });
+
+  const savedTheme = localStorage.getItem('transcrita-theme');
+  if (savedTheme) {
+    applyTheme(savedTheme);
+  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+    applyTheme('light');
+  } else {
+    applyTheme('dark');
+  }
+
+  // Drag and drop
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length) addFiles(files);
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length) addFiles(files);
+    e.target.value = '';
+  });
+
+  clearQueueBtn.addEventListener('click', () => {
+    if (isProcessing) return;
+    queue = [];
+    activeIndex = null;
+    renderQueue();
+    hideResults();
+  });
+
+  function addFiles(files) {
+    for (let file of files) {
+      const stem = file.name.replace(/\.[^/.]+$/, '');
+      queue.push({
+        file,
+        status: 'pending',
+        progress: 0,
+        text: '',
+        srt: '',
+        filename: stem || 'audio',
+        error: null
+      });
+    }
+    renderQueue();
+  }
+
+  function removeFile(index) {
+    if (isProcessing) return;
+    queue.splice(index, 1);
+    if (activeIndex === index) {
+      activeIndex = null;
+      hideResults();
+    } else if (activeIndex !== null && activeIndex > index) {
+      activeIndex--;
+    }
+    renderQueue();
+  }
+
+  function renderQueue() {
+    queueList.style.display = queue.length ? 'flex' : 'none';
+    clearQueueBtn.style.display = queue.length ? 'inline-block' : 'none';
+    queueList.innerHTML = '';
+
+    let anyDone = false;
+    queue.forEach((item, i) => {
+      const el = document.createElement('div');
+      el.className = `queue-item ${item.status} ${activeIndex === i ? 'selected' : ''}`;
+      el.tabIndex = 0;
+      el.role = 'button';
+      el.setAttribute('aria-label', item.file.name);
+
+      let badgeLabel = 'Aguardando';
+      if (item.status === 'processing') badgeLabel = `${Math.round(item.progress)}%`;
+      if (item.status === 'done') badgeLabel = 'Concluído';
+      if (item.status === 'error') badgeLabel = 'Erro';
+
+      if (item.status === 'done') anyDone = true;
+
+      el.setAttribute('title', item.file.name);
+
+      el.innerHTML = `
+        <span class="status-indicator" aria-hidden="true"></span>
+        <div class="file-meta">
+          <div class="file-name">${escapeHtml(item.file.name)}</div>
+          <div class="file-size">${formatFileSize(item.file.size)}</div>
+        </div>
+        <span class="badge ${item.status}" aria-hidden="true">${badgeLabel}</span>
+        <div class="file-actions">
+          ${item.status === 'done'
+            ? `<button type="button" class="btn-small download" data-index="${i}" title="Baixar TXT">TXT</button>
+               <button type="button" class="btn-small download" data-index="${i}" data-srt="1" title="Baixar SRT">SRT</button>`
+            : ''}
+          <button type="button" class="btn-small remove" data-index="${i}" title="Remover">&times;</button>
+        </div>
+      `;
+
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.btn-small')) return;
+        selectItem(i);
+      });
+
+      el.querySelectorAll('.btn-small').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const idx = parseInt(btn.dataset.index, 10);
+          if (btn.dataset.srt === '1') {
+            downloadItemSrt(idx);
+          } else if (btn.classList.contains('remove')) {
+            removeFile(idx);
+          } else {
+            downloadItemTxt(idx);
+          }
+        });
+      });
+
+      queueList.appendChild(el);
+    });
+
+    const doneCount = countDone();
+    copyAllBtn.style.display = doneCount >= 2 ? 'inline-block' : 'none';
+    downloadAllBtn.style.display = doneCount >= 2 ? 'inline-block' : 'none';
+  }
+
+  function countDone() {
+    return queue.filter(q => q.status === 'done').length;
+  }
+
+  function selectItem(index) {
+    if (index < 0 || index >= queue.length) return;
+    activeIndex = index;
+    const item = queue[index];
+    renderQueue();
+
+    if (item.status === 'done' || item.status === 'processing') {
+      showResults();
+      outputText.textContent = item.text || '';
+      outputSrt.textContent = item.srt || '';
+      updateFooters(item);
+      results.classList.add('results-ready');
+      updateActionButtons(item);
+    } else if (item.status === 'error') {
+      showError(item.error || 'Erro ao processar arquivo.');
+    }
+  }
+
+  function showResults() {
+    results.style.display = 'flex';
+  }
+
+  function hideResults() {
+    results.style.display = 'none';
+  }
+
+  function updateFooters(item) {
+    const words = item.text ? item.text.trim().split(/\s+/).filter(Boolean).length : 0;
+    const chars = item.text ? item.text.length : 0;
+    outputTextFooter.textContent = `${words} palavras &middot; ${chars} caracteres`;
+
+    const segments = item.srt ? (item.srt.match(/\n\d+\n/g) || []).length : 0;
+    outputSrtFooter.textContent = `${segments} segmentos`;
+  }
+
+  function updateActionButtons(item) {
+    const hasText = Boolean(item.text);
+    const hasSrt = Boolean(item.srt);
+    copyBtn.disabled = !hasText && !hasSrt;
+    downloadTxtBtn.disabled = !hasText;
+    downloadSrtBtn.disabled = !hasSrt;
+  }
+
+  // Format helpers
+  function formatFileSize(bytes) {
+    if (!bytes) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  function formatTime(seconds) {
+    if (!seconds && seconds !== 0) return '--:--';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function setLoading(loadingState) {
+    progressCard.style.display = loadingState ? 'flex' : 'none';
+    transcribeBtn.disabled = loadingState;
+    cancelBtn.disabled = !loadingState;
+    fileInput.disabled = loadingState;
+    if (loadingState) {
+      progressBar.style.width = '0%';
+      progressPct.textContent = '0%';
+      progressStatus.textContent = 'Iniciando&hellip;';
+      progressTime.textContent = '';
+    }
+  }
+
+  function showError(msg) {
+    errorMessage.textContent = msg;
+    error.style.display = 'block';
+    setLoading(false);
+  }
+
+  // Transcribe queue sequentially via SSE
+  transcribeBtn.addEventListener('click', async () => {
+    const pending = queue.filter(q => q.status === 'pending');
+    if (pending.length === 0) {
+      showError('Adicione pelo menos um arquivo à fila.');
+      return;
+    }
+
+    controller = new AbortController();
+    isProcessing = true;
+    setLoading(true);
+    error.style.display = 'none';
+    hideResults();
+
+    transcribeBtn.textContent = 'Processando fila...';
+
+    try {
+      for (let i = 0; i < queue.length; i++) {
+        if (controller.signal.aborted) break;
+        const item = queue[i];
+        if (item.status !== 'pending') continue;
+
+        activeIndex = i;
+        item.status = 'processing';
+        item.progress = 0;
+        item.text = '';
+        item.srt = '';
+        item.error = null;
+        renderQueue();
+
+        const formData = new FormData();
+        formData.append('file', item.file);
+        formData.append('model', document.getElementById('modelSelect').value);
+        formData.append('language', document.getElementById('languageSelect').value);
+        formData.append('device', 'auto');
+        formData.append('compute_type', 'default');
+        formData.append('beam_size', document.getElementById('beamSizeInput').value);
+        formData.append('vad', document.getElementById('vadCheckbox').checked ? 'true' : 'false');
+
+        progressStatus.textContent = `Arquivo ${i + 1} de ${queue.length} — Enviando&hellip;`;
+
+        await processFileSse(item, i + 1, queue.length);
+
+        if (controller.signal.aborted) break;
+
+        item.status = 'done';
+        item.progress = 100;
+        renderQueue();
+        selectItem(i);
+      }
+
+      if (!controller.signal.aborted) {
+        progressStatus.textContent = 'Fila concluída';
+        progressBar.style.width = '100%';
+        progressPct.textContent = '100%';
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        progressStatus.textContent = 'Cancelado';
+      } else {
+        showError(err.message || 'Erro durante o processamento da fila.');
+      }
+    } finally {
+      setLoading(false);
+      isProcessing = false;
+      transcribeBtn.textContent = 'Transcrever Fila';
+      controller = null;
+    }
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    if (controller) controller.abort();
+    progressStatus.textContent = 'Cancelando&hellip;';
+  }, { once: true });
+
+  async function processFileSse(item, fileNum, totalFiles) {
+    const formData = new FormData();
+    formData.append('file', item.file);
+    formData.append('model', document.getElementById('modelSelect').value);
+    formData.append('language', document.getElementById('languageSelect').value);
+    formData.append('device', 'auto');
+    formData.append('compute_type', 'default');
+    formData.append('beam_size', document.getElementById('beamSizeInput').value);
+    formData.append('vad', document.getElementById('vadCheckbox').checked ? 'true' : 'false');
+
+    const response = await fetch('/api/transcribe/stream', {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Erro ${response.status}: ${errText || 'falha na transcrição'}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const jsonStr = trimmed.slice(5).trim();
+        if (!jsonStr) continue;
+
+        try {
+          const event = JSON.parse(jsonStr);
+          handleSseEvent(item, event, fileNum, totalFiles);
+        } catch (e) {
+          // ignora linhas mal-formadas
+        }
+      }
+    }
+
+    if (buffer.trim().startsWith('data:')) {
+      try {
+        const event = JSON.parse(buffer.trim().slice(5).trim());
+        handleSseEvent(item, event, fileNum, totalFiles);
+      } catch (e) {}
+    }
+  }
+
+  function handleSseEvent(item, event, fileNum, totalFiles) {
+    const type = event.type;
+
+    if (type === 'status') {
+      progressStatus.textContent = `Arquivo ${fileNum} de ${totalFiles} — ${event.message || 'Processando&hellip;'}`;
+    } else if (type === 'segment') {
+      item.progress = event.progress != null ? event.progress : 0;
+      progressBar.style.width = `${item.progress}%`;
+      progressPct.textContent = `${item.progress}%`;
+      const duration = event.duration || 0;
+      const current = event.end || 0;
+      progressTime.textContent = `${formatTime(current)} / ${formatTime(duration)}`;
+
+      if (event.text) {
+        item.text = (item.text ? item.text + ' ' : '') + event.text.trim();
+        if (activeIndex === queue.indexOf(item)) {
+          outputText.textContent = item.text;
+          updateFooters(item);
+        }
+      }
+    } else if (type === 'done') {
+      item.filename = event.filename || item.filename;
+      item.text = event.text || '';
+      item.srt = event.srt || '';
+      item.progress = 100;
+      progressBar.style.width = '100%';
+      progressPct.textContent = '100%';
+      if (activeIndex === queue.indexOf(item)) {
+        outputText.textContent = item.text;
+        outputSrt.textContent = item.srt;
+        updateFooters(item);
+        showResults();
+        results.classList.add('results-ready');
+        updateActionButtons(item);
+      }
+    } else if (type === 'error') {
+      item.status = 'error';
+      item.error = event.detail || 'Erro durante a transcrição.';
+      item.progress = 0;
+      throw new Error(item.error);
+    }
+  }
+
+  // Tabs
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => {
+        t.classList.remove('active');
+        document.getElementById('tab' + t.dataset.tab).classList.remove('active');
+      });
+      tab.classList.add('active');
+      document.getElementById('tab' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Copy
+  copyBtn.addEventListener('click', () => {
+    const activeTab = document.querySelector('.tab.active');
+    const content = activeTab.dataset.tab === 'srt' ? (queue[activeIndex]?.srt || '') : (queue[activeIndex]?.text || '');
+    navigator.clipboard.writeText(content).then(() => {
+      const original = copyBtn.textContent;
+      copyBtn.textContent = 'Copiado!';
+      setTimeout(() => { copyBtn.textContent = original; }, 2000);
+    });
+  });
+
+  // Download single item
+  function downloadItemTxt(index) {
+    const item = queue[index];
+    if (!item.text) return;
+    downloadBlob(item.text, item.filename + '.txt', 'text/plain;charset=utf-8');
+  }
+
+  function downloadItemSrt(index) {
+    const item = queue[index];
+    if (!item.srt) return;
+    downloadBlob(item.srt, item.filename + '.srt', 'application/x-subrip;charset=utf-8');
+  }
+
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  downloadTxtBtn.addEventListener('click', () => {
+    const item = queue[activeIndex];
+    if (!item?.text) return;
+    downloadBlob(item.text, item.filename + '.txt', 'text/plain;charset=utf-8');
+  });
+
+  downloadSrtBtn.addEventListener('click', () => {
+    const item = queue[activeIndex];
+    if (!item?.srt) return;
+    downloadBlob(item.srt, item.filename + '.srt', 'application/x-subrip;charset=utf-8');
+  });
+
+  // Batch actions
+  function getDoneItems() {
+    return queue.filter(q => q.status === 'done');
+  }
+
+  copyAllBtn.addEventListener('click', () => {
+    const done = getDoneItems();
+    const parts = done.map(item => `=== ${escapeHtml(item.filename)} ===\n${item.text || ''}`);
+    navigator.clipboard.writeText(parts.join('\n\n')).then(() => {
+      const original = copyAllBtn.textContent;
+      copyAllBtn.textContent = 'Copiado!';
+      setTimeout(() => { copyAllBtn.textContent = original; }, 2000);
+    });
+  });
+
+  downloadAllBtn.addEventListener('click', () => {
+    const done = getDoneItems();
+    const parts = done.map(item => `=== ${escapeHtml(item.filename)} ===\n${item.text || ''}`);
+    downloadBlob(parts.join('\n\n'), 'transcricao_lote.txt', 'text/plain;charset=utf-8');
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "transcrita"
+version = "0.1.0"
+description = "CLI para transcrição local de áudio e vídeo em português usando faster-whisper"
+requires-python = ">=3.12"
+authors = [{ name = "Rilen" }]
+dependencies = [
+    "faster-whisper>=1.0.0",
+]
+
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "python-multipart>=0.0.12",
+]
+
+[project.scripts]
+transcrita = "transcrita.cli:main"
+transcrita-web = "transcrita.web:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["transcrita"]
+
+[tool.hatch.build.targets.wheel.package-data]
+"transcrita" = ["static/*"]
