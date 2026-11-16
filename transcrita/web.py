@@ -5,21 +5,25 @@ from __future__ import annotations
 import argparse
 import gc
 import json
+import logging
 import queue
 import tempfile
 import threading
+import time
 import webbrowser
 from pathlib import Path
 from typing import Optional
 
 import uvicorn
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
 from transcrita import __version__
 from transcrita.core import Transcriber
 from transcrita.srt import to_srt
+
+logger = logging.getLogger("transcrita.web")
 
 app = FastAPI(title="transcrita-web", version=__version__)
 
@@ -108,6 +112,7 @@ async def transcribe(
     """
     resolved_language: Optional[str] = None if language == "auto" else language
 
+    start_wall = time.perf_counter()
     transcriber = _get_transcriber(model, device, compute_type)
 
     original_name = file.filename or "audio"
@@ -134,12 +139,36 @@ async def transcribe(
                 language=resolved_language,
             )
         except Exception as exc:  # noqa: BLE001
+            elapsed = time.perf_counter() - start_wall
+            logger.error(
+                "transcricao_falhou",
+                extra={
+                    "arquivo": original_name,
+                    "modelo": model,
+                    "dispositivo": device,
+                    "tempo_proc_s": round(elapsed, 2),
+                    "erro": str(exc),
+                },
+            )
             raise HTTPException(
                 status_code=500, detail=f"falha na transcrição: {exc}"
             ) from exc
 
     full_text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
     srt_content = to_srt(segments)
+
+    elapsed = time.perf_counter() - start_wall
+    logger.info(
+        "transcricao_concluida",
+        extra={
+            "arquivo": original_name,
+            "modelo": model,
+            "dispositivo": device,
+            "tempo_proc_s": round(elapsed, 2),
+            "segmentos": len(segments),
+            "vad": vad,
+        },
+    )
 
     return JSONResponse(
         {
@@ -152,6 +181,7 @@ async def transcribe(
 
 @app.post("/api/transcribe/stream")
 async def transcribe_stream(
+    request: Request,
     file: UploadFile = File(...),
     model: str = Form("base"),
     language: str = Form("pt"),
@@ -165,11 +195,18 @@ async def transcribe_stream(
     Recebe os mesmos campos multipart/form-data de /api/transcribe, mas
     streama eventos (status, segment, done, error) para o cliente, evitando
     timeouts em arquivos longos.
+
+    Suporta cancelamento limpo: quando o cliente encerra a conexão SSE
+    (AbortController), o evento de cancelamento é disparado e a thread de
+    trabalho para a transcrição no próximo segmento.
     """
     resolved_language: Optional[str] = None if language == "auto" else language
     original_name = file.filename or "audio"
     stem = Path(original_name).stem
     suffix = Path(original_name).suffix
+    start_wall = time.perf_counter()
+
+    cancel_event = threading.Event()
 
     async def event_generator():
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -201,26 +238,31 @@ async def transcribe_stream(
                         vad_filter=vad,
                         language=resolved_language,
                         on_progress=on_progress,
+                        cancel_event=cancel_event,
                     )
-                    full_text = " ".join(
-                        seg.text.strip() for seg in segments if seg.text.strip()
-                    )
-                    srt_content = to_srt(segments)
-                    q.put(
-                        {
-                            "type": "done",
-                            "filename": stem,
-                            "text": full_text,
-                            "srt": srt_content,
-                        }
-                    )
+                    if cancel_event.is_set():
+                        q.put({"type": "cancelled", "filename": stem})
+                    else:
+                        full_text = " ".join(
+                            seg.text.strip() for seg in segments if seg.text.strip()
+                        )
+                        srt_content = to_srt(segments)
+                        q.put(
+                            {
+                                "type": "done",
+                                "filename": stem,
+                                "text": full_text,
+                                "srt": srt_content,
+                            }
+                        )
                 except Exception as exc:  # noqa: BLE001
-                    q.put(
-                        {
-                            "type": "error",
-                            "detail": f"falha na transcrição: {exc}",
-                        }
-                    )
+                    if not cancel_event.is_set():
+                        q.put(
+                            {
+                                "type": "error",
+                                "detail": f"falha na transcrição: {exc}",
+                            }
+                        )
                 finally:
                     q.put(None)  # sentinel para encerrar o gerador
 
@@ -231,12 +273,42 @@ async def transcribe_stream(
             thread.start()
 
             while True:
-                item = q.get()
+                # Detecta desconexão do cliente para cancelamento limpo
+                if await request.is_disconnected():
+                    logger.warning(
+                        "sse_cliente_desconectado",
+                        extra={"arquivo": original_name},
+                    )
+                    cancel_event.set()
+                    # Envia evento de cancelamento para o cliente, se ainda conectado
+                    try:
+                        yield (
+                            f"data: {json.dumps({'type': 'cancelled', 'filename': stem}, ensure_ascii=False)}\n\n"
+                        )
+                    except Exception:
+                        pass
+                    break
+
+                try:
+                    item = q.get(timeout=0.5)
+                except queue.Empty:
+                    continue
                 if item is None:
                     break
                 yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
 
-            thread.join()
+            thread.join(timeout=5.0)
+
+    elapsed = time.perf_counter() - start_wall
+    logger.info(
+        "sse_iniciado",
+        extra={
+            "arquivo": original_name,
+            "modelo": model,
+            "dispositivo": device,
+            "tempo_ate_inicio_s": round(elapsed, 2),
+        },
+    )
 
     return StreamingResponse(
         event_generator(),

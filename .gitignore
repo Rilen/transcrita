@@ -1,0 +1,34 @@
+# Bytecode compilado
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Ambientes virtuais
+.venv/
+venv/
+.env/
+
+# Cache de testes
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build / empacotamento
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Arquivos temporários de áudio/vídeo (transcrições locais)
+*.ogg
+*.mp4
+*.wav
+*.mp3
+*.m4a
+
+# Logs
+*.log

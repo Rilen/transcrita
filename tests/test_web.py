@@ -121,7 +121,8 @@ class TestWeb(unittest.TestCase):
         mock_transcriber = MagicMock()
 
         def fake_transcribe_file(input_path, beam_size=5, vad_filter=True,
-                                 language=None, on_progress=None):
+                                 language=None, on_progress=None,
+                                 cancel_event=None):
             if on_progress:
                 on_progress({"start": 0.0, "end": 2.5, "text": "Olá",
                              "progress": 50.0, "duration": 5.0})

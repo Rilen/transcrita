@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import tempfile
+import threading
+import time
 import wave
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
 import numpy as np
 from faster_whisper import WhisperModel
+
+logger = logging.getLogger("transcrita.core")
 
 
 @dataclass(frozen=True)
@@ -132,6 +137,7 @@ class Transcriber:
         vad_filter: bool = True,
         language: str | None = None,
         on_progress: Callable[[dict], None] | None = None,
+        cancel_event: "threading.Event | None" = None,
     ) -> list[Segment]:
         """Transcreve um arquivo de áudio ou vídeo.
 
@@ -147,6 +153,7 @@ class Transcriber:
         pelo faster-whisper com um dicionário contendo ``start``, ``end``,
         ``text``, ``progress`` (0-100) e ``duration``.
         """
+        start_wall = time.perf_counter()
         audio_path = input_path
         temp_audio: str | None = None
         resolve_language = language if language is not None else self.language
@@ -169,6 +176,15 @@ class Transcriber:
             results: list[Segment] = []
 
             for seg in segments_generator:
+                if cancel_event is not None and cancel_event.is_set():
+                    logger.info(
+                        "transcricao_cancelada",
+                        extra={
+                            "arquivo": input_path,
+                            "segmentos_ate_agora": len(results),
+                        },
+                    )
+                    break
                 segment = Segment(
                     start=float(seg.start),
                     end=float(seg.end),
@@ -192,6 +208,21 @@ class Transcriber:
                         }
                     )
 
+            elapsed = time.perf_counter() - start_wall
+            rtf = (elapsed / duration) if duration > 0 else 0.0
+            logger.info(
+                "transcricao_concluida",
+                extra={
+                    "arquivo": input_path,
+                    "duracao_s": round(duration, 2),
+                    "tempo_proc_s": round(elapsed, 2),
+                    "rtf": round(rtf, 3),
+                    "segmentos": len(results),
+                    "modelo": self.model_size,
+                    "dispositivo": self.device,
+                    "vad": vad_filter,
+                },
+            )
             return results
         finally:
             if temp_audio is not None and os.path.exists(temp_audio):

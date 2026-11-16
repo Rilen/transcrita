@@ -1,0 +1,10 @@
+# Regras do Projeto `transcrita` (Constituição do Agente)
+
+Leia e siga rigorosamente o arquivo `MATURACAO.md` na raiz deste repositório antes de realizar qualquer alteração.
+
+## Restrições Obrigatórias
+- **Python 3.15 / Fedora:** Nunca adicione `av` (PyAV) ou `onnxruntime` como dependência obrigatória. Mantenha `vad_filter=False` por padrão e decodificação via `ffmpeg` subprocess.
+- **Hardware:** Preserve o cache *single-model* em memória/VRAM e o processamento sequencial da fila.
+- **Frontend:** Mantenha `transcrita/static/index.html` 100% autocontido (HTML + CSS + Vanilla JS puro, zero CDN, zero build step).
+- **Cancelamento:** Preserve `cancel_event` (`threading.Event`) no `core.py` e detecção de `request.is_disconnected()` no SSE em `web.py`.
+- **Validação:** Sempre execute `python3 -m unittest discover -s tests -v` ao final e reporte o resultado em tabela (`Arquivo | Problema/Oportunidade | Melhoria Aplicada | Impacto`), sugerindo até 3 próximos passos sem executá-los antes de confirmação.
