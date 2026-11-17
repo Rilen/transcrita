@@ -1,0 +1,43 @@
+{
+  "whisper-small": {
+    "type": "faster_whisper",
+    "model_size": "small",
+    "compute_type": "int8",
+    "cpu_threads": 12,
+    "beam_size": 5,
+    "vad_filter": false
+  },
+  "whisper-medium": {
+    "type": "faster_whisper",
+    "model_size": "medium",
+    "compute_type": "int8",
+    "cpu_threads": 12,
+    "beam_size": 5,
+    "vad_filter": false
+  },
+  "whisper-large-v3-turbo": {
+    "type": "faster_whisper",
+    "model_size": "large-v3-turbo",
+    "compute_type": "int8",
+    "cpu_threads": 12,
+    "beam_size": 5,
+    "vad_filter": false
+  },
+  "whisper-large-v3": {
+    "type": "faster_whisper",
+    "model_size": "large-v3",
+    "compute_type": "int8",
+    "cpu_threads": 12,
+    "beam_size": 5,
+    "vad_filter": false
+  },
+  "parakeet-ptbr-tagarela-int8": {
+    "type": "parakeet_onnx",
+    "family": "nemo-conformer-tdt",
+    "repo_id": "calneymgp/parakeet-tdt-0.6b-v3-ptBR-TAGARELA-onnx-int8",
+    "cpu_threads": 12,
+    "local_dir": "/var/lib/transcrita-poc/models/parakeet-ptbr-tagarela-int8",
+    "local_path": "/var/lib/transcrita-poc/models/parakeet-ptbr-tagarela-int8",
+    "quantization": "int8"
+  }
+}
