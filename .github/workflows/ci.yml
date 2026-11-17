@@ -32,6 +32,12 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Dependências de sistema (FFmpeg — runtime e testes)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          ffmpeg -version | head -n 1
+
       - name: Instalar dependências (sem pesos, sem GPU)
         run: |
           python -m pip install --upgrade pip
@@ -50,6 +56,17 @@ jobs:
           set -o pipefail
           python -m unittest discover -s tests -v 2>&1 | tee tests.log
 
+      - name: Anotar falhas (diagnóstico público)
+        if: failure()
+        shell: bash
+        run: |
+          if [ -f tests.log ]; then
+            grep -E '^(FAIL|ERROR):' tests.log | head -n 20 | while IFS= read -r line; do
+              echo "::error title=Teste falhou::${line}"
+            done
+          fi
+          true
+
       - name: Resumo da execução
         if: always()
         shell: bash
@@ -60,8 +77,10 @@ jobs:
             echo "- Runner: Ubuntu (GitHub-hosted), Python 3.12"
             echo "- Comando: \`python -m unittest discover -s tests -v\`"
             echo "- SHA: \`${GITHUB_SHA}\`"
+            echo "- FFmpeg: \`$(ffmpeg -version 2>/dev/null | head -n 1)\`"
             echo ""
             echo '```'
-            tail -n 25 tests.log 2>/dev/null || echo "log indisponível"
+            grep -E '^(FAIL|ERROR):' tests.log 2>/dev/null | head -n 10 || true
+            tail -n 20 tests.log 2>/dev/null || echo "log indisponível"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
