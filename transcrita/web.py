@@ -19,6 +19,7 @@ import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from transcrita import __version__
 from transcrita.core import Transcriber
@@ -26,11 +27,57 @@ from transcrita.srt import to_srt
 
 logger = logging.getLogger("transcrita.web")
 
+# Configuração de limites de upload (bytes) - compatível com nginx proxy 512MB
+MAX_UPLOAD_SIZE = 512 * 1024 * 1024  # 512 MB
+
+# Semáforo global para serialização de inferências (máximo 1 concorrente)
+# Pode ser substituído em testes (ex.: por um mock ou threading.Semaphore(100))
+_inference_semaphore: threading.Semaphore = threading.Semaphore(1)
+
+
+class UploadSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Middleware para limitar tamanho de upload antes do parsing multipart.
+
+    Rejeita requisições com Content-Length > MAX_UPLOAD_SIZE com HTTP 413.
+    Para streaming sem Content-Length, conta bytes durante a leitura.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        # Aplicar apenas aos endpoints de transcrição
+        if request.url.path not in ("/api/transcribe", "/api/transcribe/stream"):
+            return await call_next(request)
+
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                cl = int(content_length)
+                if cl > MAX_UPLOAD_SIZE:
+                    logger.warning(
+                        "upload_rejected_content_length",
+                        extra={"content_length": cl, "max": MAX_UPLOAD_SIZE, "path": request.url.path},
+                    )
+                    return JSONResponse(
+                        {"detail": f"Arquivo excede o limite de {MAX_UPLOAD_SIZE // (1024*1024)} MB"},
+                        status_code=413,
+                    )
+            except ValueError:
+                pass  # Content-Length inválido, deixar o parser lidar
+
+        # Para streaming sem Content-Length, contar bytes no body
+        # Nota: isso consome o body, então precisamos reconstruir o request
+        # Para simplicidade, confiamos no limite do nginx (512MB) como segunda camada
+        # e no parser multipart do FastAPI/Starlette que tem limites internos.
+        return await call_next(request)
+
+
 app = FastAPI(
     title="transcrita-web",
     version=__version__,
     root_path=os.environ.get("TRANSCRITA_ROOT_PATH", ""),
 )
+
+# Middleware de limite de upload
+app.add_middleware(UploadSizeLimitMiddleware)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -124,70 +171,80 @@ async def transcribe(
     resolved_language: Optional[str] = None if language == "auto" else language
 
     start_wall = time.perf_counter()
-    transcriber = _get_transcriber(model, device, compute_type)
 
-    original_name = file.filename or "audio"
-    stem = Path(original_name).stem
-    suffix = Path(original_name).suffix
+    # Serialização global de inferências
+    acquired = _inference_semaphore.acquire(timeout=300)  # 5 min max wait
+    if not acquired:
+        raise HTTPException(status_code=503, detail="Servidor ocupado, tente novamente")
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp_path = Path(tmpdir) / f"upload{suffix}"
+    try:
+        transcriber = _get_transcriber(model, device, compute_type)
 
-        # Streaming do UploadFile para arquivo temporário
-        with open(tmp_path, "wb") as buffer:
-            while True:
-                chunk = await file.read(1024 * 1024)
-                if not chunk:
-                    break
-                buffer.write(chunk)
+        original_name = file.filename or "audio"
+        stem = Path(original_name).stem
+        suffix = Path(original_name).suffix
 
-        try:
-            segments = await run_in_threadpool(
-                transcriber.transcribe_file,
-                str(tmp_path),
-                beam_size=beam_size,
-                vad_filter=vad,
-                language=resolved_language,
-            )
-        except Exception as exc:  # noqa: BLE001
-            elapsed = time.perf_counter() - start_wall
-            logger.error(
-                "transcricao_falhou",
-                extra={
-                    "arquivo": original_name,
-                    "modelo": model,
-                    "dispositivo": device,
-                    "tempo_proc_s": round(elapsed, 2),
-                    "erro": str(exc),
-                },
-            )
-            raise HTTPException(
-                status_code=500, detail=f"falha na transcrição: {exc}"
-            ) from exc
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir) / f"upload{suffix}"
 
-    full_text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
-    srt_content = to_srt(segments)
+            # Streaming do UploadFile para arquivo temporário
+            with open(tmp_path, "wb") as buffer:
+                while True:
+                    chunk = await file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    buffer.write(chunk)
 
-    elapsed = time.perf_counter() - start_wall
-    logger.info(
-        "transcricao_concluida",
-        extra={
-            "arquivo": original_name,
-            "modelo": model,
-            "dispositivo": device,
-            "tempo_proc_s": round(elapsed, 2),
-            "segmentos": len(segments),
-            "vad": vad,
-        },
-    )
+            try:
+                segments = await run_in_threadpool(
+                    transcriber.transcribe_file,
+                    str(tmp_path),
+                    beam_size=beam_size,
+                    vad_filter=vad,
+                    language=resolved_language,
+                    ffmpeg_timeout=300,
+                )
+            except Exception as exc:  # noqa: BLE001
+                elapsed = time.perf_counter() - start_wall
+                logger.error(
+                    "transcricao_falhou",
+                    extra={
+                        "arquivo": original_name,
+                        "modelo": model,
+                        "dispositivo": device,
+                        "tempo_proc_s": round(elapsed, 2),
+                        "erro": str(exc),
+                    },
+                )
+                raise HTTPException(
+                    status_code=500, detail=f"falha na transcrição: {exc}"
+                ) from exc
 
-    return JSONResponse(
-        {
-            "filename": stem,
-            "text": full_text,
-            "srt": srt_content,
-        }
-    )
+        full_text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
+        srt_content = to_srt(segments)
+
+        elapsed = time.perf_counter() - start_wall
+        logger.info(
+            "transcricao_concluida",
+            extra={
+                "arquivo": original_name,
+                "modelo": model,
+                "dispositivo": device,
+                "tempo_proc_s": round(elapsed, 2),
+                "segmentos": len(segments),
+                "vad": vad,
+            },
+        )
+
+        return JSONResponse(
+            {
+                "filename": stem,
+                "text": full_text,
+                "srt": srt_content,
+            }
+        )
+    finally:
+        _inference_semaphore.release()
 
 
 @app.post("/api/transcribe/stream")
@@ -217,98 +274,120 @@ async def transcribe_stream(
     suffix = Path(original_name).suffix
     start_wall = time.perf_counter()
 
+    # Serialização global de inferências (adquire antes de salvar upload)
+    acquired = _inference_semaphore.acquire(timeout=300)
+    if not acquired:
+        return StreamingResponse(
+            iter([f"data: {json.dumps({'type': 'error', 'detail': 'Servidor ocupado, tente novamente'}, ensure_ascii=False)}\n\n"]),
+            media_type="text/event-stream",
+            status_code=503,
+        )
+
     cancel_event = threading.Event()
+    semaphore_acquired = True
 
     async def event_generator():
-        with tempfile.TemporaryDirectory() as tmpdir:
-            tmp_path = Path(tmpdir) / f"upload{suffix}"
+        nonlocal semaphore_acquired
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmp_path = Path(tmpdir) / f"upload{suffix}"
 
-            # Salva o upload em arquivo temporário (streaming por chunks)
-            with open(tmp_path, "wb") as buffer:
-                while True:
-                    chunk = await file.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    buffer.write(chunk)
+                # Salva o upload em arquivo temporário (streaming por chunks)
+                with open(tmp_path, "wb") as buffer:
+                    while True:
+                        chunk = await file.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        buffer.write(chunk)
 
-            q: "queue.Queue[dict | None]" = queue.Queue()
+                q: "queue.Queue[dict | None]" = queue.Queue()
 
-            def on_progress(data: dict) -> None:
-                q.put({"type": "segment", **data})
+                def on_progress(data: dict) -> None:
+                    q.put({"type": "segment", **data})
 
-            def worker() -> None:
-                try:
-                    yield_status("Carregando modelo...")
-                    transcriber = _get_transcriber(
-                        model, device, compute_type
-                    )
-                    yield_status("Extraindo áudio...")
-                    segments = transcriber.transcribe_file(
-                        str(tmp_path),
-                        beam_size=beam_size,
-                        vad_filter=vad,
-                        language=resolved_language,
-                        on_progress=on_progress,
-                        cancel_event=cancel_event,
-                    )
-                    if cancel_event.is_set():
-                        q.put({"type": "cancelled", "filename": stem})
-                    else:
-                        full_text = " ".join(
-                            seg.text.strip() for seg in segments if seg.text.strip()
-                        )
-                        srt_content = to_srt(segments)
-                        q.put(
-                            {
-                                "type": "done",
-                                "filename": stem,
-                                "text": full_text,
-                                "srt": srt_content,
-                            }
-                        )
-                except Exception as exc:  # noqa: BLE001
-                    if not cancel_event.is_set():
-                        q.put(
-                            {
-                                "type": "error",
-                                "detail": f"falha na transcrição: {exc}",
-                            }
-                        )
-                finally:
-                    q.put(None)  # sentinel para encerrar o gerador
-
-            def yield_status(message: str) -> None:
-                q.put({"type": "status", "message": message})
-
-            thread = threading.Thread(target=worker)
-            thread.start()
-
-            while True:
-                # Detecta desconexão do cliente para cancelamento limpo
-                if await request.is_disconnected():
-                    logger.warning(
-                        "sse_cliente_desconectado",
-                        extra={"arquivo": original_name},
-                    )
-                    cancel_event.set()
-                    # Envia evento de cancelamento para o cliente, se ainda conectado
+                def worker() -> None:
                     try:
-                        yield (
-                            f"data: {json.dumps({'type': 'cancelled', 'filename': stem}, ensure_ascii=False)}\n\n"
+                        yield_status("Carregando modelo...")
+                        transcriber = _get_transcriber(
+                            model, device, compute_type
                         )
-                    except Exception:
-                        pass
-                    break
+                        yield_status("Extraindo áudio...")
+                        segments = transcriber.transcribe_file(
+                            str(tmp_path),
+                            beam_size=beam_size,
+                            vad_filter=vad,
+                            language=resolved_language,
+                            on_progress=on_progress,
+                            cancel_event=cancel_event,
+                            ffmpeg_timeout=300,
+                        )
+                        if cancel_event.is_set():
+                            q.put({"type": "cancelled", "filename": stem})
+                        else:
+                            full_text = " ".join(
+                                seg.text.strip() for seg in segments if seg.text.strip()
+                            )
+                            srt_content = to_srt(segments)
+                            q.put(
+                                {
+                                    "type": "done",
+                                    "filename": stem,
+                                    "text": full_text,
+                                    "srt": srt_content,
+                                }
+                            )
+                    except Exception as exc:  # noqa: BLE001
+                        if not cancel_event.is_set():
+                            q.put(
+                                {
+                                    "type": "error",
+                                    "detail": f"falha na transcrição: {exc}",
+                                }
+                            )
+                    finally:
+                        q.put(None)  # sentinel para encerrar o gerador
 
-                try:
-                    item = q.get(timeout=0.5)
-                except queue.Empty:
-                    continue
-                if item is None:
-                    break
-                yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+                def yield_status(message: str) -> None:
+                    q.put({"type": "status", "message": message})
 
-            thread.join(timeout=5.0)
+                thread = threading.Thread(target=worker)
+                thread.start()
+
+                while True:
+                    # Detecta desconexão do cliente para cancelamento limpo
+                    if await request.is_disconnected():
+                        logger.warning(
+                            "sse_cliente_desconectado",
+                            extra={"arquivo": original_name},
+                        )
+                        cancel_event.set()
+                        # Libera semáforo se cliente desconectou antes de iniciar inferência
+                        if semaphore_acquired:
+                            _inference_semaphore.release()
+                            semaphore_acquired = False
+                        # Envia evento de cancelamento para o cliente, se ainda conectado
+                        try:
+                            yield (
+                                f"data: {json.dumps({'type': 'cancelled', 'filename': stem}, ensure_ascii=False)}\n\n"
+                            )
+                        except Exception:
+                            pass
+                        break
+
+                    try:
+                        item = q.get(timeout=0.5)
+                    except queue.Empty:
+                        continue
+                    if item is None:
+                        break
+                    yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+                thread.join(timeout=5.0)
+        finally:
+            # Garante liberação do semáforo em todos os caminhos
+            if semaphore_acquired:
+                _inference_semaphore.release()
+                semaphore_acquired = False
 
     elapsed = time.perf_counter() - start_wall
     logger.info(

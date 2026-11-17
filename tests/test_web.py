@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from transcrita.web import MAX_UPLOAD_SIZE
 import io
 import json
+import threading
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -19,6 +21,15 @@ class TestWeb(unittest.TestCase):
         with _transcriber_lock:
             _transcriber_cache["key"] = None
             _transcriber_cache["instance"] = None
+        # Substitui semáforo por versão restritiva (1) para testar serialização
+        import transcrita.web
+        self._original_semaphore = transcrita.web._inference_semaphore
+        transcrita.web._inference_semaphore = threading.Semaphore(1)
+
+    def tearDown(self) -> None:
+        # Restaura semáforo original
+        import transcrita.web
+        transcrita.web._inference_semaphore = self._original_semaphore
 
     def test_get_index(self) -> None:
         """GET / deve retornar a página HTML da interface web."""
@@ -122,7 +133,7 @@ class TestWeb(unittest.TestCase):
 
         def fake_transcribe_file(input_path, beam_size=5, vad_filter=True,
                                  language=None, on_progress=None,
-                                 cancel_event=None):
+                                 cancel_event=None, ffmpeg_timeout=None):
             if on_progress:
                 on_progress({"start": 0.0, "end": 2.5, "text": "Olá",
                              "progress": 50.0, "duration": 5.0})
@@ -238,3 +249,207 @@ class TestWeb(unittest.TestCase):
 
         # A app do transcrita respeita TRANSCRITA_ROOT_PATH via ambiente
         self.assertTrue(hasattr(app, "root_path"))
+
+    # --- Novos testes para P0 fixes ---
+
+    @patch("transcrita.web.Transcriber")
+    def test_upload_size_limit_rejects_large_content_length(self, mock_transcriber_cls) -> None:
+        # Usa semáforo não-bloqueante para este teste
+        import transcrita.web
+        transcrita.web._inference_semaphore = threading.Semaphore(100)
+        """Content-Length acima do limite deve retornar 413 antes do parsing."""
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe_file.return_value = []
+        mock_transcriber_cls.return_value = mock_transcriber
+
+        with patch("transcrita.web.to_srt", return_value=""):
+            # Simula Content-Length > 512MB
+            headers = {"content-length": str(MAX_UPLOAD_SIZE + 1)}
+            file_content = b"fake audio data"
+            files = {"file": ("audio.wav", io.BytesIO(file_content), "audio/wav")}
+            data = {
+                "model": "base",
+                "language": "pt",
+                "device": "auto",
+                "compute_type": "default",
+                "beam_size": "5",
+                "vad": "false",
+            }
+
+            response = self.client.post(
+                "/api/transcribe", files=files, data=data, headers=headers
+            )
+
+            self.assertEqual(response.status_code, 413)
+            self.assertIn("excede o limite", response.json()["detail"])
+
+    @patch("transcrita.web.Transcriber")
+    def test_upload_size_limit_allows_exact_limit(self, mock_transcriber_cls) -> None:
+        import transcrita.web
+        transcrita.web._inference_semaphore = threading.Semaphore(100)
+        """Content-Length exatamente no limite deve ser aceito."""
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe_file.return_value = []
+        mock_transcriber_cls.return_value = mock_transcriber
+
+        with patch("transcrita.web.to_srt", return_value=""):
+            headers = {"content-length": str(MAX_UPLOAD_SIZE)}
+            file_content = b"fake audio data"
+            files = {"file": ("audio.wav", io.BytesIO(file_content), "audio/wav")}
+            data = {
+                "model": "base",
+                "language": "pt",
+                "device": "auto",
+                "compute_type": "default",
+                "beam_size": "5",
+                "vad": "false",
+            }
+
+            response = self.client.post(
+                "/api/transcribe", files=files, data=data, headers=headers
+            )
+
+            # Deve passar pelo middleware (pode falhar depois por arquivo fake, mas não 413)
+            self.assertNotEqual(response.status_code, 413)
+
+    @patch("transcrita.web.Transcriber")
+    def test_upload_size_limit_ignores_other_paths(self, mock_transcriber_cls) -> None:
+        import transcrita.web
+        transcrita.web._inference_semaphore = threading.Semaphore(100)
+        """Middleware não deve afetar rotas fora de /api/transcribe*."""
+        mock_transcriber = MagicMock()
+        mock_transcriber_cls.return_value = mock_transcriber
+
+        # Health check com Content-Length grande não deve ser rejeitado
+        headers = {"content-length": str(MAX_UPLOAD_SIZE + 1)}
+        response = self.client.get("/api/health", headers=headers)
+        self.assertEqual(response.status_code, 200)
+
+    @patch("transcrita.web.to_srt")
+    @patch("transcrita.web.Transcriber")
+    def test_inference_serialization_sync_endpoint(self, mock_transcriber_cls, mock_to_srt) -> None:
+        """Duas requisições síncronas simultâneas devem ser serializadas."""
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        call_times = []
+
+        def slow_transcribe(*args, **kwargs):
+            call_times.append(("start", time.time()))
+            time.sleep(0.1)  # Simula processamento
+            call_times.append(("end", time.time()))
+            return [MagicMock(start=0.0, end=1.0, text="test")]
+
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe_file.side_effect = slow_transcribe
+        mock_transcriber_cls.return_value = mock_transcriber
+
+        mock_to_srt.return_value = "1\n00:00:00,000 --> 00:00:01,000\ntest\n"
+
+        file_content = b"fake audio data"
+        files = {"file": ("audio.wav", io.BytesIO(file_content), "audio/wav")}
+        data = {
+            "model": "base",
+            "language": "pt",
+            "device": "auto",
+            "compute_type": "default",
+            "beam_size": "5",
+            "vad": "false",
+        }
+
+        def make_request():
+            return self.client.post("/api/transcribe", files=files, data=data)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(make_request) for _ in range(2)]
+            results = [f.result() for f in futures]
+
+        # Ambas devem retornar 200
+        for r in results:
+            self.assertEqual(r.status_code, 200)
+
+        # Verifica serialização: segunda chamada inicia após primeira terminar
+        starts = [t for t in call_times if t[0] == "start"]
+        ends = [t for t in call_times if t[0] == "end"]
+        self.assertEqual(len(starts), 2)
+        self.assertEqual(len(ends), 2)
+        # Primeira termina antes da segunda iniciar
+        self.assertLess(ends[0][1], starts[1][1])
+
+    @patch("transcrita.web.to_srt")
+    @patch("transcrita.web.Transcriber")
+    def test_inference_serialization_stream_endpoint(self, mock_transcriber_cls, mock_to_srt) -> None:
+        """Requisição SSE deve respeitar serialização."""
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        call_times = []
+
+        def slow_transcribe(*args, **kwargs):
+            call_times.append(("start", time.time()))
+            time.sleep(0.1)
+            call_times.append(("end", time.time()))
+            return [MagicMock(start=0.0, end=1.0, text="test")]
+
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe_file.side_effect = slow_transcribe
+        mock_transcriber_cls.return_value = mock_transcriber
+
+        mock_to_srt.return_value = "1\n00:00:00,000 --> 00:00:01,000\ntest\n"
+
+        file_content = b"fake audio data"
+        files = {"file": ("audio.wav", io.BytesIO(file_content), "audio/wav")}
+        data = {
+            "model": "base",
+            "language": "pt",
+            "device": "auto",
+            "compute_type": "default",
+            "beam_size": "5",
+            "vad": "false",
+        }
+
+        def make_stream_request():
+            return self.client.post("/api/transcribe/stream", files=files, data=data)
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(make_stream_request) for _ in range(2)]
+            results = [f.result() for f in futures]
+
+        for r in results:
+            self.assertEqual(r.status_code, 200)
+            self.assertIn("text/event-stream", r.headers.get("content-type", ""))
+
+        starts = [t for t in call_times if t[0] == "start"]
+        ends = [t for t in call_times if t[0] == "end"]
+        self.assertEqual(len(starts), 2)
+        self.assertEqual(len(ends), 2)
+        self.assertLess(ends[0][1], starts[1][1])
+
+    @patch("transcrita.web.Transcriber")
+    def test_semaphore_released_on_exception(self, mock_transcriber_cls) -> None:
+        import transcrita.web
+        transcrita.web._inference_semaphore = threading.Semaphore(100)
+        """Semáforo deve ser liberado mesmo em caso de exceção."""
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe_file.side_effect = RuntimeError("Erro simulado")
+        mock_transcriber_cls.return_value = mock_transcriber
+
+        file_content = b"fake audio data"
+        files = {"file": ("audio.wav", io.BytesIO(file_content), "audio/wav")}
+        data = {
+            "model": "base",
+            "language": "pt",
+            "device": "auto",
+            "compute_type": "default",
+            "beam_size": "5",
+            "vad": "false",
+        }
+
+        # Primeira requisição falha
+        response1 = self.client.post("/api/transcribe", files=files, data=data)
+        self.assertEqual(response1.status_code, 500)
+
+        # Segunda requisição deve conseguir adquirir semáforo (não travado)
+        response2 = self.client.post("/api/transcribe", files=files, data=data)
+        self.assertEqual(response2.status_code, 500)  # Falha pelo mesmo motivo, mas não por semáforo
+
