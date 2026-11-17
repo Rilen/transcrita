@@ -18,6 +18,11 @@ web = [
     "uvicorn>=0.32",
     "python-multipart>=0.0.12",
 ]
+# Motor Parakeet PT-BR (experimental): instalar apenas onde a flag for habilitada.
+parakeet = [
+    "onnx-asr[cpu,hub]>=0.12,<0.13",
+    "soundfile>=0.12",
+]
 
 [project.scripts]
 transcrita = "transcrita.cli:main"
