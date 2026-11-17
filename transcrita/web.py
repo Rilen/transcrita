@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import queue
+import re
 import tempfile
 import threading
 import time
@@ -20,7 +21,6 @@ import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from transcrita import __version__
 from transcrita.core import Transcriber
@@ -37,6 +37,16 @@ logger = logging.getLogger("transcrita.web")
 
 # Configuração de limites de upload (bytes) - compatível com nginx proxy 512MB
 MAX_UPLOAD_SIZE = 512 * 1024 * 1024  # 512 MB
+
+_UPLOAD_PATHS = ("/api/transcribe", "/api/transcribe/stream")
+_PATH_RE = re.compile(r"(?<![\w:/])/(?:[^\s'\"<>]+)(?:/[^\s'\"<>]*)?")
+
+
+def _sanitize_error(exc: object) -> str:
+    """Mensagem pública sem caminhos absolutos; detalhe completo vai ao log."""
+    msg = str(exc).replace("\n", " ").strip()
+    msg = _PATH_RE.sub("[caminho]", msg)
+    return msg[:300]
 
 # Semáforo global para serialização de inferências (máximo 1 concorrente)
 # Pode ser substituído em testes (ex.: por um mock ou threading.Semaphore(100))
@@ -114,39 +124,69 @@ async def _acquire_inference_slot(timeout: float = 300.0) -> bool:
     return await future
 
 
-class UploadSizeLimitMiddleware(BaseHTTPMiddleware):
-    """Middleware para limitar tamanho de upload antes do parsing multipart.
+class UploadSizeLimitMiddleware:
+    """Limite efetivo de upload (Content-Length e corpos chunked).
 
-    Rejeita requisições com Content-Length > MAX_UPLOAD_SIZE com HTTP 413.
-    Para streaming sem Content-Length, conta bytes durante a leitura.
+    - Rejeita cedo quando Content-Length excede o limite.
+    - Para corpos sem Content-Length (chunked), conta bytes no receive e
+      levanta HTTP 413 sem bufferizar o corpo integral em memória.
     """
 
-    async def dispatch(self, request: Request, call_next):
-        # Aplicar apenas aos endpoints de transcrição
-        if request.url.path not in ("/api/transcribe", "/api/transcribe/stream"):
-            return await call_next(request)
+    def __init__(self, app):
+        self.app = app
 
-        content_length = request.headers.get("content-length")
-        if content_length is not None:
+    async def _reject(self, send) -> None:
+        body = json.dumps(
+            {"detail": f"Arquivo excede o limite de {MAX_UPLOAD_SIZE // (1024 * 1024)} MB"}
+        ).encode("utf-8")
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode("ascii")),
+            ],
+        })
+        await send({"type": "http.response.body", "body": body})
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http" or scope.get("path") not in _UPLOAD_PATHS:
+            return await self.app(scope, receive, send)
+
+        headers = {k.lower(): v for k, v in (scope.get("headers") or [])}
+        declared = headers.get(b"content-length")
+        if declared is not None:
             try:
-                cl = int(content_length)
-                if cl > MAX_UPLOAD_SIZE:
+                if int(declared) > MAX_UPLOAD_SIZE:
                     logger.warning(
                         "upload_rejected_content_length",
-                        extra={"content_length": cl, "max": MAX_UPLOAD_SIZE, "path": request.url.path},
+                        extra={"content_length": int(declared), "max": MAX_UPLOAD_SIZE,
+                               "path": scope.get("path")},
                     )
-                    return JSONResponse(
-                        {"detail": f"Arquivo excede o limite de {MAX_UPLOAD_SIZE // (1024*1024)} MB"},
-                        status_code=413,
-                    )
+                    return await self._reject(send)
             except ValueError:
-                pass  # Content-Length inválido, deixar o parser lidar
+                pass
 
-        # Para streaming sem Content-Length, contar bytes no body
-        # Nota: isso consome o body, então precisamos reconstruir o request
-        # Para simplicidade, confiamos no limite do nginx (512MB) como segunda camada
-        # e no parser multipart do FastAPI/Starlette que tem limites internos.
-        return await call_next(request)
+        total = 0
+
+        async def limited_receive():
+            nonlocal total
+            message = await receive()
+            if message.get("type") == "http.request":
+                total += len(message.get("body", b"") or b"")
+                if total > MAX_UPLOAD_SIZE:
+                    logger.warning(
+                        "upload_rejected_chunked",
+                        extra={"bytes_received": total, "max": MAX_UPLOAD_SIZE,
+                               "path": scope.get("path")},
+                    )
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Arquivo excede o limite de {MAX_UPLOAD_SIZE // (1024 * 1024)} MB",
+                    )
+            return message
+
+        await self.app(scope, limited_receive, send)
 
 
 app = FastAPI(
@@ -178,11 +218,14 @@ _parakeet_cache: dict = {"key": None, "instance": None}
 
 
 def _evict_whisper() -> None:
+    freed = False
     with _transcriber_lock:
         if _transcriber_cache["instance"] is not None:
             _transcriber_cache["key"] = None
             _transcriber_cache["instance"] = None
-            gc.collect()
+            freed = True
+    if freed:
+        gc.collect()
 
 
 def _evict_parakeet() -> None:
@@ -193,6 +236,8 @@ def _evict_parakeet() -> None:
     if instance is not None:
         try:
             instance.unload()
+        except Exception:  # noqa: BLE001
+            logger.warning("parakeet_unload_failed", exc_info=True)
         finally:
             gc.collect()
 
@@ -376,7 +421,7 @@ async def transcribe(
                     },
                 )
                 raise HTTPException(
-                    status_code=500, detail=f"falha na transcrição: {exc}"
+                    status_code=500, detail=f"falha na transcrição: {_sanitize_error(exc)}"
                 ) from exc
 
         full_text = " ".join(seg.text.strip() for seg in segments if seg.text.strip())
@@ -507,11 +552,12 @@ async def transcribe_stream(
                                 }
                             )
                     except Exception as exc:  # noqa: BLE001
+                        logger.warning("sse_transcricao_falhou", extra={"erro": str(exc)})
                         if not cancel_event.is_set():
                             q.put(
                                 {
                                     "type": "error",
-                                    "detail": f"falha na transcrição: {exc}",
+                                    "detail": f"falha na transcrição: {_sanitize_error(exc)}",
                                     **meta,
                                 }
                             )

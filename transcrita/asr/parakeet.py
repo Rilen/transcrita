@@ -8,6 +8,7 @@ e fusão de pausas <= 350 ms. Não usar MMS_FA (licença NC) neste caminho.
 from __future__ import annotations
 
 import gc
+import logging
 import os
 import subprocess
 import tempfile
@@ -19,6 +20,8 @@ import numpy as np
 import soundfile as sf
 
 from transcrita.core import FFMPEG_TIMEOUT, Segment
+
+logger = logging.getLogger("transcrita.asr.parakeet")
 
 VAD_CONFIG = {
     "threshold": 0.30,
@@ -68,14 +71,31 @@ class ParakeetEngine:
             return input_path, False
         fd, tmp = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
-        result = subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", "-i", input_path, "-vn",
-             "-ac", "1", "-ar", "16000", tmp],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout,
-        )
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-loglevel", "error", "-i", input_path, "-vn",
+                 "-ac", "1", "-ar", "16000", tmp],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            Path(tmp).unlink(missing_ok=True)
+            logger.warning(
+                "ffmpeg_timeout_prepare",
+                extra={"input": input_path, "timeout_s": timeout},
+            )
+            raise RuntimeError(
+                f"ffmpeg excedeu o tempo limite ({timeout}s) ao preparar o áudio"
+            ) from exc
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
         if result.returncode != 0:
             Path(tmp).unlink(missing_ok=True)
-            raise RuntimeError(f"ffmpeg falhou ao preparar áudio: {result.stderr[:300]}")
+            logger.warning(
+                "ffmpeg_failed_prepare",
+                extra={"input": input_path, "stderr": (result.stderr or "")[:500]},
+            )
+            raise RuntimeError("ffmpeg falhou ao preparar o áudio")
         return tmp, True
 
     @staticmethod

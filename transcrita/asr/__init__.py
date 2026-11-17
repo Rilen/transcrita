@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,6 +22,8 @@ PARAKEET_MODEL = {"value": "pt-br-int8", "label": "PT-BR INT8"}
 
 DEFAULT_PARAKEET_PATH = "/var/lib/transcrita-poc/models/parakeet-ptbr-tagarela-int8"
 
+logger = logging.getLogger("transcrita.asr")
+
 
 def parakeet_enabled() -> bool:
     """Flag administrativa; desligada por padrão."""
@@ -32,17 +36,40 @@ def parakeet_weights_path() -> str:
     return os.environ.get("TRANSCRITA_PARAKEET_MODEL", DEFAULT_PARAKEET_PATH)
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def parakeet_availability() -> tuple[bool, str]:
-    """Disponibilidade real: dependência importável e pesos presentes."""
+    """Disponibilidade real: dependências, pesos e (opcional) checksum.
+
+    Mensagens públicas são genéricas; caminhos e detalhes vão para o log.
+    """
     if importlib.util.find_spec("onnx_asr") is None:
         return False, "dependência onnx-asr não instalada (extra [parakeet])"
     if importlib.util.find_spec("soundfile") is None:
         return False, "dependência soundfile não instalada (extra [parakeet])"
     path = Path(parakeet_weights_path())
     if not path.is_dir():
-        return False, f"pesos não encontrados em {path}"
-    if not (path / "encoder-model.int8.onnx").exists():
-        return False, f"checkpoint INT8 incompleto em {path}"
+        logger.warning("parakeet_weights_missing", extra={"path": str(path)})
+        return False, "pesos do modelo não encontrados (verifique TRANSCRITA_PARAKEET_MODEL)"
+    encoder = path / "encoder-model.int8.onnx"
+    if not encoder.exists():
+        logger.warning("parakeet_weights_incomplete", extra={"path": str(path)})
+        return False, "checkpoint INT8 incompleto"
+    expected = os.environ.get("TRANSCRITA_PARAKEET_SHA256", "").strip().lower()
+    if expected:
+        actual = _sha256_file(encoder)
+        if actual != expected:
+            logger.warning(
+                "parakeet_checksum_mismatch",
+                extra={"expected": expected, "actual": actual},
+            )
+            return False, "checksum dos pesos não confere"
     return True, ""
 
 

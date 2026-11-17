@@ -149,21 +149,36 @@ class EngineContractTests(unittest.TestCase):
         self.assertIn("bom dia", srt)
 
     def test_concurrency_serialized_with_engine_param(self) -> None:
+        """Duas requisições concorrentes serializam com um único mock (sem corrida de patch)."""
         fake = FakeEngine(delay=0.15)
+        original = web._get_engine
+        data = {**DATASET, "engine": "whisper"}
         start = time.perf_counter()
+        results: list = []
+        lock = threading.Lock()
 
-        def call():
-            return self._post("whisper", fake=fake)
+        with patch.object(web, "_get_engine", return_value=fake):
+            def call() -> None:
+                resp = self.client.post(
+                    "/api/transcribe",
+                    files={"file": ("a.wav", io.BytesIO(b"fake"), "audio/wav")},
+                    data=data,
+                )
+                with lock:
+                    results.append(resp)
 
-        results = []
-        threads = [threading.Thread(target=lambda: results.append(call())) for _ in range(2)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+            threads = [threading.Thread(target=call) for _ in range(2)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
         elapsed = time.perf_counter() - start
         self.assertEqual([r.status_code for r in results], [200, 200])
         self.assertGreaterEqual(elapsed, 0.28)
+        # Restauração integral: nenhum mock pode permanecer no módulo.
+        self.assertIs(web._get_engine, original)
+        self.assertNotIsInstance(web._get_engine, MagicMock)
 
     def test_engine_cache_switches_single_model(self) -> None:
         with patch("transcrita.asr.parakeet.ParakeetEngine") as pk_cls, \
