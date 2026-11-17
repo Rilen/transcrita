@@ -1,0 +1,246 @@
+{
+  "models": {
+    "parakeet-ptbr-tagarela-int8": {
+      "overall": {
+        "clips_ok": 24.0,
+        "clips_total": 24.0,
+        "wer": 0.10778443113772455,
+        "cer": 0.05381559510049817,
+        "audio_seconds": 133.263,
+        "proc_seconds": 7.924230238189921,
+        "rtf": 0.05946309356828167,
+        "load_time_s": 2.575961029040627,
+        "peak_rss_mb": 1748.8671875,
+        "threads": 12
+      },
+      "by_scenario": {
+        "spontaneous": {
+          "clips_ok": 16.0,
+          "clips_total": 16.0,
+          "wer": 0.10232558139534884,
+          "cer": 0.051777065564139184,
+          "audio_seconds": 87.203,
+          "proc_seconds": 5.199954510084353,
+          "rtf": 0.059630454343134444
+        },
+        "prepared": {
+          "clips_ok": 8.0,
+          "clips_total": 8.0,
+          "wer": 0.11764705882352941,
+          "cer": 0.05749865266618879,
+          "audio_seconds": 46.06,
+          "proc_seconds": 2.7242757281055674,
+          "rtf": 0.0591462381264778
+        }
+      },
+      "sdi": {
+        "substitutions_per_word": 0.057057057057057055,
+        "deletions_per_word": 0.024024024024024024,
+        "insertions_per_word": 0.02702702702702703,
+        "ref_words": 333
+      },
+      "numbers": {
+        "ref_numbers": 0.0,
+        "hyp_numbers": 0.0,
+        "matched": 0.0,
+        "recall": 0.0,
+        "spurious": 0.0
+      },
+      "rare_terms": {
+        "rare_tokens": 115.0,
+        "rare_recall": 0.9565217391304348
+      },
+      "timestamps": {
+        "clips_with_segments": 0,
+        "mean_segments": 0.0,
+        "mean_span_coverage": 0.0
+      }
+    },
+    "qwen3-asr-0.6b": {
+      "overall": {
+        "clips_ok": 24.0,
+        "clips_total": 24.0,
+        "wer": 0.19461077844311378,
+        "cer": 0.10531934461199037,
+        "audio_seconds": 133.263,
+        "proc_seconds": 40.89624100923538,
+        "rtf": 0.30688368871506255,
+        "load_time_s": 4.0879982319893315,
+        "peak_rss_mb": 6014.91796875,
+        "threads": 12
+      },
+      "by_scenario": {
+        "spontaneous": {
+          "clips_ok": 16.0,
+          "clips_total": 16.0,
+          "wer": 0.2186046511627907,
+          "cer": 0.12390522679878944,
+          "audio_seconds": 87.203,
+          "proc_seconds": 25.84551934315823,
+          "rtf": 0.29638337377335905
+        },
+        "prepared": {
+          "clips_ok": 8.0,
+          "clips_total": 8.0,
+          "wer": 0.15126050420168066,
+          "cer": 0.07173980956861391,
+          "audio_seconds": 46.06,
+          "proc_seconds": 15.050721666077152,
+          "rtf": 0.3267633883212582
+        }
+      },
+      "sdi": {
+        "substitutions_per_word": 0.0990990990990991,
+        "deletions_per_word": 0.06606606606606606,
+        "insertions_per_word": 0.03003003003003003,
+        "ref_words": 333
+      },
+      "numbers": {
+        "ref_numbers": 0.0,
+        "hyp_numbers": 0.0,
+        "matched": 0.0,
+        "recall": 0.0,
+        "spurious": 0.0
+      },
+      "rare_terms": {
+        "rare_tokens": 115.0,
+        "rare_recall": 0.8782608695652174
+      },
+      "timestamps": {
+        "clips_with_segments": 0,
+        "mean_segments": 0.0,
+        "mean_span_coverage": 0.0
+      }
+    },
+    "whisper-large-v3-turbo": {
+      "overall": {
+        "clips_ok": 24.0,
+        "clips_total": 24.0,
+        "wer": 0.15269461077844312,
+        "cer": 0.09111825542154862,
+        "audio_seconds": 133.263,
+        "proc_seconds": 78.37513316865079,
+        "rtf": 0.5881237340345842,
+        "load_time_s": 3.6769960400415584,
+        "peak_rss_mb": 2098.44140625,
+        "threads": 12
+      },
+      "by_scenario": {
+        "spontaneous": {
+          "clips_ok": 16.0,
+          "clips_total": 16.0,
+          "wer": 0.16279069767441862,
+          "cer": 0.10472263637174097,
+          "audio_seconds": 87.203,
+          "proc_seconds": 52.001665306743234,
+          "rtf": 0.5963288568827131
+        },
+        "prepared": {
+          "clips_ok": 8.0,
+          "clips_total": 8.0,
+          "wer": 0.13445378151260504,
+          "cer": 0.06653891168800784,
+          "audio_seconds": 46.06,
+          "proc_seconds": 26.373467861907557,
+          "rtf": 0.5725894021256526
+        }
+      },
+      "sdi": {
+        "substitutions_per_word": 0.05405405405405406,
+        "deletions_per_word": 0.06606606606606606,
+        "insertions_per_word": 0.03303303303303303,
+        "ref_words": 333
+      },
+      "numbers": {
+        "ref_numbers": 0.0,
+        "hyp_numbers": 0.0,
+        "matched": 0.0,
+        "recall": 0.0,
+        "spurious": 0.0
+      },
+      "rare_terms": {
+        "rare_tokens": 115.0,
+        "rare_recall": 0.9304347826086956
+      },
+      "timestamps": {
+        "clips_with_segments": 24,
+        "mean_segments": 1.1666666666666667,
+        "mean_span_coverage": 0.8923627096252189
+      }
+    },
+    "whisper-large-v3": {
+      "overall": {
+        "clips_ok": 24.0,
+        "clips_total": 24.0,
+        "wer": 0.17365269461077845,
+        "cer": 0.10134972466958647,
+        "audio_seconds": 133.263,
+        "proc_seconds": 149.180287029827,
+        "rtf": 1.1194426587261805,
+        "load_time_s": 5.6787998949876055,
+        "peak_rss_mb": 3982.3359375,
+        "threads": 12
+      },
+      "by_scenario": {
+        "spontaneous": {
+          "clips_ok": 16.0,
+          "clips_total": 16.0,
+          "wer": 0.19069767441860466,
+          "cer": 0.11823942934792257,
+          "audio_seconds": 87.203,
+          "proc_seconds": 97.41471563582309,
+          "rtf": 1.1171028019199234
+        },
+        "prepared": {
+          "clips_ok": 8.0,
+          "clips_total": 8.0,
+          "wer": 0.14285714285714285,
+          "cer": 0.07083471201544984,
+          "audio_seconds": 46.06,
+          "proc_seconds": 51.76557139400393,
+          "rtf": 1.1238725877986089
+        }
+      },
+      "sdi": {
+        "substitutions_per_word": 0.07207207207207207,
+        "deletions_per_word": 0.06606606606606606,
+        "insertions_per_word": 0.036036036036036036,
+        "ref_words": 333
+      },
+      "numbers": {
+        "ref_numbers": 0.0,
+        "hyp_numbers": 0.0,
+        "matched": 0.0,
+        "recall": 0.0,
+        "spurious": 0.0
+      },
+      "rare_terms": {
+        "rare_tokens": 115.0,
+        "rare_recall": 0.9130434782608695
+      },
+      "timestamps": {
+        "clips_with_segments": 24,
+        "mean_segments": 1.2083333333333333,
+        "mean_span_coverage": 0.8841598381709342
+      }
+    }
+  },
+  "stability": {
+    "parakeet-ptbr-tagarela-int8": {
+      "runs": 3,
+      "wer_mean": 0.1415929203539823,
+      "wer_sd": 0.0,
+      "proc_time_mean_s": 2.610252190264873,
+      "proc_time_sd_s": 0.08072518995653502,
+      "outputs_identical": true
+    },
+    "whisper-large-v3-turbo": {
+      "runs": 3,
+      "wer_mean": 0.23008849557522124,
+      "wer_sd": 0.0,
+      "proc_time_mean_s": 28.12535786962447,
+      "proc_time_sd_s": 1.315962018422301,
+      "outputs_identical": true
+    }
+  }
+}

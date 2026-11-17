@@ -1,0 +1,50 @@
+{
+  "captured_utc": "2026-11-17T14:11:32Z",
+  "environment": {
+    "python": "3.12.3",
+    "platform": "Linux-6.8.0-147-generic-x86_64-with-glibc2.39",
+    "faster_whisper": "1.2.1",
+    "ctranslate2": "4.9.0",
+    "onnxruntime": "1.32.0",
+    "onnx_asr": "0.12.0"
+  },
+  "models": {
+    "whisper-small": {
+      "runtime": "faster-whisper",
+      "repo_id": "Systran/faster-whisper-small",
+      "revision": "536b0662742c02347bc0e980a01041f333bce120",
+      "license": "mit"
+    },
+    "whisper-medium": {
+      "runtime": "faster-whisper",
+      "repo_id": "Systran/faster-whisper-medium",
+      "revision": "08e178d48790749d25932bbc082711ddcfdfbc4f",
+      "license": "mit"
+    },
+    "whisper-large-v3": {
+      "runtime": "faster-whisper",
+      "repo_id": "Systran/faster-whisper-large-v3",
+      "revision": "edaa852ec7e145841d8ffdb056a99866b5f0a478",
+      "license": "mit"
+    },
+    "whisper-large-v3-turbo": {
+      "runtime": "faster-whisper",
+      "repo_id": "mobiuslabsgmbh/faster-whisper-large-v3-turbo",
+      "revision": "0a363e9161cbc7ed1431c9597a8ceaf0c4f78fcf",
+      "license": "mit"
+    },
+    "parakeet-ptbr-tagarela-int8": {
+      "runtime": "onnx-asr",
+      "repo_id": "calneymgp/parakeet-tdt-0.6b-v3-ptBR-TAGARELA-onnx-int8",
+      "revision": "7d84392553633a8e5bdca7eccb5ae25467e9572f",
+      "license": "cc-by-4.0"
+    },
+    "qwen3-asr-0.6b": {
+      "runtime": "qwen-asr/torch-cpu",
+      "repo_id": "Qwen/Qwen3-ASR-0.6B",
+      "revision": "5eb144179a02acc5e5ba31e748d22b0cf3e303b0",
+      "license": "apache-2.0"
+    }
+  },
+  "load_time_semantics": "run_benchmark.load_time_s inclui download na primeira execução; tempos a quente medidos por warm_load.py sem inferência"
+}

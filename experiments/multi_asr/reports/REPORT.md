@@ -137,3 +137,12 @@ já validado nesta PoC, sem alterar o frontend ou o fluxo SSE existente.
 
 Ver [`../README.md`](../README.md). Resultados sanitizados: [`RESULTS.md`](RESULTS.md) e
 [`results_summary.json`](results_summary.json).
+
+
+---
+
+## Adendo 004 — correções metodológicas
+- Revisões e licenças de pesos/runtime pinadas em `reports/METADATA.json`.
+- Esclarecido que `load_time_s` inclui download na primeira execução (a quente: `warm_load.py`).
+- Corpus 003 usou MLS (CC-BY-4.0), permitindo degradações sintéticas; o corpus 004 usa NURC-SP (CC-BY-NC-ND), **sem qualquer transformação de áudio**.
+- Validação em fala espontânea/preparada: ver `reports/validation_004/REPORT_004.md`.

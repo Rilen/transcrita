@@ -106,7 +106,8 @@ def main(argv: list[str] | None = None) -> None:
         if "model" not in payload:
             continue
         results[payload["model"]] = payload
-    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    raw_manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    manifest = raw_manifest["items"] if isinstance(raw_manifest, dict) else raw_manifest
     summary = summarize(results, manifest)
 
     Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
