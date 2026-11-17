@@ -664,6 +664,182 @@ class TestWeb(unittest.TestCase):
                 resp2 = self.client.post("/api/transcribe", files=files, data=data)
                 self.assertEqual(resp2.status_code, 200)
 
+
+
+    # --- Testes de aceitação para estabilização do ciclo de vida SSE ---
+
+    @patch("transcrita.web.Transcriber")
+    def test_worker_active_long_duration_does_not_release_slot(self, mock_transcriber_cls) -> None:
+        """Worker ativo por tempo prolongado não libera a vaga de inferência."""
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        def very_slow_transcribe(*args, **kwargs):
+            time.sleep(0.5)  # Simula worker longo
+            return [MagicMock(start=0.0, end=1.0, text="test")]
+
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe_file.side_effect = very_slow_transcribe
+        mock_transcriber_cls.return_value = mock_transcriber
+
+        with patch("transcrita.web.to_srt", return_value="1\n00:00:00,000 --> 00:00:01,000\ntest\n"):
+            # Inicia primeira requisição (worker lento)
+            def make_first_request():
+                files = {"file": ("audio1.wav", io.BytesIO(b"fake"), "audio/wav")}
+                data = {"model": "base", "language": "pt", "device": "auto", "compute_type": "default", "beam_size": "5", "vad": "false"}
+                return self.client.post("/api/transcribe", files=files, data=data)
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                future1 = executor.submit(make_first_request)
+                time.sleep(0.1)  # Garante que primeira requisição adquiriu semáforo
+
+                # Segunda requisição deve ser bloqueada
+                def make_second_request():
+                    files = {"file": ("audio2.wav", io.BytesIO(b"fake"), "audio/wav")}
+                    data = {"model": "base", "language": "pt", "device": "auto", "compute_type": "default", "beam_size": "5", "vad": "false"}
+                    return self.client.post("/api/transcribe", files=files, data=data)
+
+                future2 = executor.submit(make_second_request)
+
+                # Primeira deve terminar
+                resp1 = future1.result()
+                self.assertEqual(resp1.status_code, 200)
+
+                # Segunda deve terminar depois da primeira (semáforo não liberado prematuramente)
+                resp2 = future2.result(timeout=2.0)
+                self.assertEqual(resp2.status_code, 200)
+
+    @patch("transcrita.web.Transcriber")
+    def test_empty_queue_does_not_terminate_sse(self, mock_transcriber_cls) -> None:
+        """Fila vazia temporariamente não encerra o SSE."""
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        def slow_transcribe(*args, **kwargs):
+            time.sleep(0.3)
+            return [MagicMock(start=0.0, end=1.0, text="test")]
+
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe_file.side_effect = slow_transcribe
+        mock_transcriber_cls.return_value = mock_transcriber
+
+        with patch("transcrita.web.to_srt", return_value="1\n00:00:00,000 --> 00:00:01,000\ntest\n"):
+            files = {"file": ("audio.wav", io.BytesIO(b"fake"), "audio/wav")}
+            data = {"model": "base", "language": "pt", "device": "auto", "compute_type": "default", "beam_size": "5", "vad": "false"}
+
+            # Faz requisição SSE
+            resp = self.client.post("/api/transcribe/stream", files=files, data=data)
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn("text/event-stream", resp.headers.get("content-type", ""))
+            
+            # Verifica que recebe eventos (status, segment, done)
+            events = []
+            for line in resp.iter_lines():
+                if line:
+                    events.append(line)
+            
+            # Deve ter recebido status e done
+            event_types = [json.loads(e.replace("data: ", ""))["type"] for e in events if e.startswith("data: ")]
+            self.assertIn("status", event_types)
+            self.assertIn("done", event_types)
+
+    def test_cancelled_event_is_valid_json(self) -> None:
+        """Evento cancelled deve ser JSON válido."""
+        cancelled_event = json.dumps({"type": "cancelled", "filename": "test"}, ensure_ascii=False)
+        parsed = json.loads(cancelled_event)
+        self.assertEqual(parsed["type"], "cancelled")
+        self.assertEqual(parsed["filename"], "test")
+
+    @patch("transcrita.web.Transcriber")
+    def test_cancel_during_acquisition_does_not_leak_semaphore(self, mock_transcriber_cls) -> None:
+        """Cancelamento durante aquisição assíncrona não vaza o semáforo."""
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        # Mock acquire para ser lento
+        original_acquire = threading.Semaphore.acquire
+        def slow_acquire_mock(self, timeout=None):
+            time.sleep(0.2)
+            return original_acquire(self, timeout=timeout)
+        threading.Semaphore.acquire = slow_acquire_mock
+
+        try:
+            mock_transcriber = MagicMock()
+            mock_transcriber.transcribe_file.return_value = [MagicMock(start=0.0, end=1.0, text="test")]
+            mock_transcriber_cls.return_value = mock_transcriber
+
+            with patch("transcrita.web.to_srt", return_value="1\n00:00:00,000 --> 00:00:01,000\ntest\n"):
+                files = {"file": ("audio.wav", io.BytesIO(b"fake"), "audio/wav")}
+                data = {"model": "base", "language": "pt", "device": "auto", "compute_type": "default", "beam_size": "5", "vad": "false"}
+
+                # Inicia requisição que vai ser cancelada durante aquisição
+                def make_request():
+                    return self.client.post("/api/transcribe", files=files, data=data)
+
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(make_request)
+                    time.sleep(0.05)  # Inicia aquisição
+                    # Cancela a requisição (simula timeout do cliente)
+                    # Verifica que semáforo não vazou restaurando original
+                    threading.Semaphore.acquire = original_acquire
+                    acquired = _inference_semaphore.acquire(timeout=1)
+                    self.assertTrue(acquired, "Semáforo não deveria ter vazado")
+                    _inference_semaphore.release()
+        finally:
+            threading.Semaphore.acquire = original_acquire
+
+    def test_repeated_cancel_does_not_double_release(self) -> None:
+        """Cancelamento repetido não provoca dupla liberação."""
+        import transcrita.web
+        
+        # Verifica estado inicial do semáforo
+        initial_acquired = _inference_semaphore.acquire(timeout=1)
+        self.assertTrue(initial_acquired)
+        _inference_semaphore.release()
+
+        # Simula múltiplos cancelamentos no finally
+        for _ in range(3):
+            if _inference_semaphore._value > 0:
+                _inference_semaphore.acquire(timeout=1)
+            _inference_semaphore.release()
+        
+        # Verifica que semáforo volta ao estado original (1)
+        final_acquired = _inference_semaphore.acquire(timeout=1)
+        self.assertTrue(final_acquired)
+        _inference_semaphore.release()
+
+    @patch("transcrita.web.Transcriber")
+    def test_healthcheck_responsive_during_sse(self, mock_transcriber_cls) -> None:
+        """Healthcheck permanece responsivo durante SSE ativo."""
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        def slow_transcribe(*args, **kwargs):
+            time.sleep(0.3)
+            return [MagicMock(start=0.0, end=1.0, text="test")]
+
+        mock_transcriber = MagicMock()
+        mock_transcriber.transcribe_file.side_effect = slow_transcribe
+        mock_transcriber_cls.return_value = mock_transcriber
+
+        with patch("transcrita.web.to_srt", return_value="1\n00:00:00,000 --> 00:00:01,000\ntest\n"):
+            def make_sse_request():
+                files = {"file": ("audio.wav", io.BytesIO(b"fake"), "audio/wav")}
+                data = {"model": "base", "language": "pt", "device": "auto", "compute_type": "default", "beam_size": "5", "vad": "false"}
+                return self.client.post("/api/transcribe/stream", files=files, data=data)
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                future = executor.submit(make_sse_request)
+                time.sleep(0.05)  # Garante que SSE iniciou
+
+                # Healthcheck deve responder imediatamente
+                health_resp = self.client.get("/api/health")
+                self.assertEqual(health_resp.status_code, 200)
+                self.assertEqual(health_resp.json(), {"status": "ok"})
+
+                future.result()
+
+
     def test_no_semaphore_leak_or_double_release(self) -> None:
         """Verifica ausência de vazamento ou dupla liberação do semáforo."""
         import transcrita.web

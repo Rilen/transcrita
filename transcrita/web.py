@@ -277,10 +277,21 @@ async def transcribe_stream(
 
     cancel_event = threading.Event()
     worker_finished = threading.Event()
+    semaphore_acquired = False
 
     async def event_generator():
+        nonlocal semaphore_acquired
         # Serialização global de inferências (async acquire para não bloquear event loop)
-        acquired = await asyncio.to_thread(_inference_semaphore.acquire, timeout=300)
+        try:
+            acquired = await asyncio.to_thread(_inference_semaphore.acquire, timeout=300)
+        except asyncio.CancelledError:
+            # Cancelado durante aquisição - sem semáforo para liberar
+            raise
+        except Exception:
+            # Qualquer outro erro na aquisição
+            yield f"data: {json.dumps({'type': 'error', 'detail': 'Servidor ocupado, tente novamente'}, ensure_ascii=False)}\n\n"
+            return
+
         if not acquired:
             yield f"data: {json.dumps({'type': 'error', 'detail': 'Servidor ocupado, tente novamente'}, ensure_ascii=False)}\n\n"
             return
@@ -367,9 +378,8 @@ async def transcribe_stream(
                         # NÃO libera semáforo aqui - apenas sinaliza cancelamento
                         # O semáforo será liberado quando o worker terminar (finally)
                         try:
-                            yield (
-                                f"data: {json.dumps({{'type': 'cancelled', 'filename': stem}}, ensure_ascii=False)}\n\n"
-                            )
+                            cancelled_event = json.dumps({"type": "cancelled", "filename": stem}, ensure_ascii=False)
+                            yield f"data: {cancelled_event}\n\n"
                         except Exception:
                             pass
                         break
@@ -377,21 +387,33 @@ async def transcribe_stream(
                     # Non-blocking queue get via asyncio.to_thread
                     try:
                         item = await asyncio.to_thread(q.get, timeout=0.5)
-                    except RuntimeError:
-                        # Timeout ou erro na thread
+                    except queue.Empty:
+                        # Timeout temporário da fila - continua aguardando eventos
+                        continue
+                    except asyncio.CancelledError:
+                        # Coroutine cancelada durante espera na fila
+                        cancel_event.set()
+                        raise
+                    except Exception:
+                        # Qualquer outro erro na leitura da fila
                         continue
                     if item is None:
                         break
                     yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
 
                 # Aguarda worker terminar (já deve ter terminado se chegou aqui)
-                await asyncio.to_thread(thread.join, timeout=5.0)
+                try:
+                    await asyncio.to_thread(thread.join, timeout=5.0)
+                except asyncio.CancelledError:
+                    cancel_event.set()
+                    raise
         finally:
             # Garante liberação do semáforo APENAS após worker terminar
             if semaphore_acquired:
-                # Se worker não terminou, aguarda
+                # Se worker não terminou, aguarda indefinidamente (sem timeout)
+                # para não liberar a vaga enquanto o worker estiver ativo
                 if not worker_finished.is_set():
-                    await asyncio.to_thread(worker_finished.wait, timeout=30.0)
+                    await asyncio.to_thread(worker_finished.wait)
                 _inference_semaphore.release()
                 semaphore_acquired = False
 
@@ -414,7 +436,6 @@ async def transcribe_stream(
             "X-Accel-Buffering": "no",
         },
     )
-
 
 def main(argv: list[str] | None = None) -> None:
     """Ponto de entrada do servidor web transcrita-web."""
