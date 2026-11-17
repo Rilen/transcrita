@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import subprocess
 import tempfile
 import threading
@@ -14,6 +15,9 @@ from typing import Callable, Sequence
 
 import numpy as np
 from faster_whisper import WhisperModel
+
+# Timeout padrão para FFmpeg (segundos) - configurável via env
+FFMPEG_TIMEOUT = int(os.environ.get("TRANSCRITA_FFMPEG_TIMEOUT", "300"))
 
 logger = logging.getLogger("transcrita.core")
 
@@ -59,14 +63,21 @@ class Transcriber:
             self._model = WhisperModel(self.model_size, **kwargs)
         return self._model
 
-    def extract_audio(self, input_path: str) -> str:
+    def extract_audio(self, input_path: str, timeout: int | None = None) -> str:
         """Extrai áudio de um arquivo de áudio/vídeo usando ffmpeg.
 
         Retorna o caminho de um arquivo WAV temporário mono a 16 kHz,
         adequado para o Whisper.
+
+        Args:
+            input_path: Caminho do arquivo de entrada.
+            timeout: Timeout em segundos para o processo ffmpeg. Usa TRANSCRITA_FFMPEG_TIMEOUT se None.
         """
         if not os.path.exists(input_path):
             raise FileNotFoundError(f"Arquivo não encontrado: {input_path}")
+
+        if timeout is None:
+            timeout = FFMPEG_TIMEOUT
 
         fd, output_path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
@@ -86,12 +97,20 @@ class Transcriber:
             output_path,
         ]
 
-        result = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            os.unlink(output_path)
+            raise RuntimeError(
+                f"ffmpeg excedeu timeout de {timeout}s ao extrair áudio de {input_path}"
+            )
+
         if result.returncode != 0:
             os.unlink(output_path)
             raise RuntimeError(
@@ -138,6 +157,7 @@ class Transcriber:
         language: str | None = None,
         on_progress: Callable[[dict], None] | None = None,
         cancel_event: "threading.Event | None" = None,
+        ffmpeg_timeout: int | None = None,
     ) -> list[Segment]:
         """Transcreve um arquivo de áudio ou vídeo.
 
@@ -160,7 +180,7 @@ class Transcriber:
 
         try:
             if self._needs_conversion(input_path):
-                temp_audio = self.extract_audio(input_path)
+                temp_audio = self.extract_audio(input_path, timeout=ffmpeg_timeout)
                 audio_path = temp_audio
 
             audio_array = self.load_wav_audio(audio_path)

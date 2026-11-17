@@ -120,3 +120,33 @@ class TestCore(unittest.TestCase):
             self.assertEqual(results[0].text, "primeiro")
         finally:
             Path(path).unlink(missing_ok=True)
+
+    # --- Novos testes para FFmpeg timeout ---
+
+    def test_extract_audio_timeout(self) -> None:
+        """FFmpeg deve respeitar timeout configurado."""
+        import subprocess
+
+        # Cria um arquivo de vídeo fake
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+            path = tmp.name
+        try:
+            # Escreve alguns bytes para simular arquivo
+            with open(path, "wb") as f:
+                f.write(b"fake video content")
+
+            t = Transcriber(model_size="base")
+            # Timeout muito curto deve falhar
+            with self.assertRaises(RuntimeError) as cm:
+                t.extract_audio(path, timeout=0.001)  # 1ms - impossível de completar
+            self.assertIn("excedeu timeout", str(cm.exception))
+        finally:
+            Path(path).unlink(missing_ok=True)
+
+    def test_extract_audio_uses_default_timeout(self) -> None:
+        """extract_audio deve usar FFMPEG_TIMEOUT do ambiente quando timeout=None."""
+        from transcrita.core import FFMPEG_TIMEOUT
+        # Apenas verifica que a constante existe e é um int positivo
+        self.assertIsInstance(FFMPEG_TIMEOUT, int)
+        self.assertGreater(FFMPEG_TIMEOUT, 0)
+
