@@ -35,6 +35,77 @@ MAX_UPLOAD_SIZE = 512 * 1024 * 1024  # 512 MB
 # Pode ser substituído em testes (ex.: por um mock ou threading.Semaphore(100))
 _inference_semaphore: threading.Semaphore = threading.Semaphore(1)
 
+# Teto de corrotinas aguardando a vaga simultaneamente. Impede acúmulo
+# ilimitado de threads de espera (controle de concorrência/DoS).
+MAX_SLOT_WAITERS = 16
+_slot_waiters_lock = threading.Lock()
+_slot_waiters = 0
+
+
+def _slot_waiters_enter() -> bool:
+    """Registra um esperador de vaga; False quando o teto foi atingido."""
+    global _slot_waiters
+    with _slot_waiters_lock:
+        if _slot_waiters >= MAX_SLOT_WAITERS:
+            return False
+        _slot_waiters += 1
+        return True
+
+
+def _slot_waiters_leave() -> None:
+    global _slot_waiters
+    with _slot_waiters_lock:
+        if _slot_waiters > 0:
+            _slot_waiters -= 1
+
+
+async def _acquire_inference_slot(timeout: float = 300.0) -> bool:
+    """Adquire a vaga global de inferência sem bloquear o event loop.
+
+    Contrato de propriedade:
+    - A espera acontece em thread dedicada (event loop permanece livre).
+    - Cancelamento antes da concessão: a coroutine é cancelada e uma
+      concessão tardia é devolvida imediatamente ao semáforo, sem vazamento.
+    - Concessão entregue: o chamador é dono da vaga e deve liberá-la.
+    """
+    if not _slot_waiters_enter():
+        logger.warning("inference_slot_waiters_limit", extra={"max": MAX_SLOT_WAITERS})
+        return False
+
+    loop = asyncio.get_running_loop()
+    future: "asyncio.Future[bool]" = loop.create_future()
+
+    def _deliver(acquired: bool) -> None:
+        # Executa sempre no thread do event loop: sem corrida com o cancelamento.
+        if future.done():
+            # A coroutine já não existe (cancelada). Devolve concessão tardia.
+            if acquired:
+                _inference_semaphore.release()
+                logger.warning("inference_slot_late_grant_released")
+            return
+        future.set_result(acquired)
+
+    def _worker() -> None:
+        acquired = False
+        try:
+            acquired = _inference_semaphore.acquire(timeout=timeout)
+        finally:
+            try:
+                loop.call_soon_threadsafe(_deliver, acquired)
+            except RuntimeError:
+                # Event loop encerrado durante a espera: não vazar a vaga.
+                if acquired:
+                    _inference_semaphore.release()
+                logger.warning("inference_slot_loop_closed")
+            finally:
+                _slot_waiters_leave()
+
+    threading.Thread(
+        target=_worker, daemon=True, name="transcrita-slot-acquire"
+    ).start()
+
+    return await future
+
 
 class UploadSizeLimitMiddleware(BaseHTTPMiddleware):
     """Middleware para limitar tamanho de upload antes do parsing multipart.
@@ -173,8 +244,9 @@ async def transcribe(
 
     start_wall = time.perf_counter()
 
-    # Serialização global de inferências (async acquire para não bloquear event loop)
-    acquired = await asyncio.to_thread(_inference_semaphore.acquire, timeout=300)
+    # Serialização global de inferências (espera em thread dedicada,
+    # sem bloquear o event loop e sem vazar a vaga em caso de cancelamento).
+    acquired = await _acquire_inference_slot(timeout=300)
     if not acquired:
         raise HTTPException(status_code=503, detail="Servidor ocupado, tente novamente")
 
@@ -281,17 +353,9 @@ async def transcribe_stream(
 
     async def event_generator():
         nonlocal semaphore_acquired
-        # Serialização global de inferências (async acquire para não bloquear event loop)
-        try:
-            acquired = await asyncio.to_thread(_inference_semaphore.acquire, timeout=300)
-        except asyncio.CancelledError:
-            # Cancelado durante aquisição - sem semáforo para liberar
-            raise
-        except Exception:
-            # Qualquer outro erro na aquisição
-            yield f"data: {json.dumps({'type': 'error', 'detail': 'Servidor ocupado, tente novamente'}, ensure_ascii=False)}\n\n"
-            return
-
+        # Serialização global de inferências (espera em thread dedicada,
+        # sem bloquear o event loop e sem vazar a vaga em caso de cancelamento).
+        acquired = await _acquire_inference_slot(timeout=300)
         if not acquired:
             yield f"data: {json.dumps({'type': 'error', 'detail': 'Servidor ocupado, tente novamente'}, ensure_ascii=False)}\n\n"
             return
@@ -358,8 +422,8 @@ async def transcribe_stream(
                                 }
                             )
                     finally:
-                        q.put(None)  # sentinel para encerrar o gerador
                         worker_finished.set()
+                        q.put(None)  # sentinel para encerrar o gerador
 
                 def yield_status(message: str) -> None:
                     q.put({"type": "status", "message": message})
@@ -408,14 +472,25 @@ async def transcribe_stream(
                     cancel_event.set()
                     raise
         finally:
-            # Garante liberação do semáforo APENAS após worker terminar
+            # A vaga nunca é liberada antes de o worker terminar de fato.
+            # Sem await aqui: seguro mesmo se o gerador for cancelado.
             if semaphore_acquired:
-                # Se worker não terminou, aguarda indefinidamente (sem timeout)
-                # para não liberar a vaga enquanto o worker estiver ativo
-                if not worker_finished.is_set():
-                    await asyncio.to_thread(worker_finished.wait)
-                _inference_semaphore.release()
                 semaphore_acquired = False
+                if worker_finished.is_set():
+                    _inference_semaphore.release()
+                else:
+                    def _release_after_worker() -> None:
+                        # Espera sem limite: a capacidade permanece
+                        # indisponível até o worker finalizar.
+                        worker_finished.wait()
+                        _inference_semaphore.release()
+                        logger.info("inference_slot_released_after_worker_exit")
+
+                    threading.Thread(
+                        target=_release_after_worker,
+                        daemon=True,
+                        name="transcrita-slot-release",
+                    ).start()
 
     elapsed = time.perf_counter() - start_wall
     logger.info(

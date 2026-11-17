@@ -750,43 +750,123 @@ class TestWeb(unittest.TestCase):
         self.assertEqual(parsed["type"], "cancelled")
         self.assertEqual(parsed["filename"], "test")
 
-    @patch("transcrita.web.Transcriber")
-    def test_cancel_during_acquisition_does_not_leak_semaphore(self, mock_transcriber_cls) -> None:
-        """Cancelamento durante aquisição assíncrona não vaza o semáforo."""
-        import time
-        from concurrent.futures import ThreadPoolExecutor
+    def test_cancel_during_acquisition_does_not_leak_semaphore(self) -> None:
+        """Cancelamento durante a aquisição devolve a vaga (sem vazamento)."""
+        import asyncio as _asyncio
+        import transcrita.web as web
 
-        # Mock acquire para ser lento
-        original_acquire = threading.Semaphore.acquire
-        def slow_acquire_mock(self, timeout=None):
-            time.sleep(0.2)
-            return original_acquire(self, timeout=timeout)
-        threading.Semaphore.acquire = slow_acquire_mock
+        async def _scenario() -> None:
+            loop = _asyncio.get_running_loop()
+            sem = web._inference_semaphore
+            self.assertTrue(sem.acquire(blocking=False), "vaga deveria estar livre")
+            try:
+                task = loop.create_task(web._acquire_inference_slot(timeout=10))
+                deadline = loop.time() + 5
+                while web._slot_waiters == 0:
+                    self.assertLess(loop.time(), deadline, "esperador não registrado")
+                    await _asyncio.sleep(0.01)
 
+                task.cancel()
+                with self.assertRaises(_asyncio.CancelledError):
+                    await task
+
+                # Primeira requisição termina e libera a vaga.
+                sem.release()
+
+                # Aguarda o thread de espera sair (concessão tardia processada).
+                deadline = loop.time() + 5
+                while web._slot_waiters != 0:
+                    self.assertLess(loop.time(), deadline, "esperador não finalizou")
+                    await _asyncio.sleep(0.01)
+
+                # A concessão tardia deve ter sido devolvida: exatamente 1 vaga.
+                acquired = False
+                while not acquired:
+                    acquired = sem.acquire(blocking=False)
+                    if acquired:
+                        break
+                    self.assertLess(loop.time(), deadline, "vaga vazou após cancelamento")
+                    await _asyncio.sleep(0.01)
+                self.assertTrue(acquired)
+                sem.release()
+            finally:
+                drained = 0
+                while sem.acquire(blocking=False):
+                    drained += 1
+                for _ in range(max(1, drained)):
+                    sem.release()
+
+        _asyncio.run(_scenario())
+
+    def test_late_grant_after_cancel_does_not_leak_slot(self) -> None:
+        """Cenário 1-2-3: concessão tardia após cancelamento não vaza a vaga.
+
+        1. Requisição 1 mantém a vaga ocupada.
+        2. Requisição 2 inicia aquisição e é cancelada antes de obter a vaga.
+        3. Requisição 3 deve adquirir normalmente após a liberação da primeira.
+        """
+        import asyncio as _asyncio
+        import transcrita.web as web
+
+        async def _scenario() -> None:
+            loop = _asyncio.get_running_loop()
+            sem = web._inference_semaphore
+            # Requisição 1 toma a vaga para si.
+            self.assertTrue(sem.acquire(blocking=False), "vaga deveria estar livre")
+            try:
+                # Requisição 2 aguarda a vaga em thread dedicada.
+                task2 = loop.create_task(web._acquire_inference_slot(timeout=10))
+                deadline = loop.time() + 5
+                while web._slot_waiters == 0:
+                    self.assertLess(loop.time(), deadline, "requisição 2 não entrou na espera")
+                    await _asyncio.sleep(0.01)
+
+                # Requisição 2 é cancelada antes de adquirir.
+                task2.cancel()
+                with self.assertRaises(_asyncio.CancelledError):
+                    await task2
+
+                # Requisição 1 libera a vaga; a concessão tardia deve ser devolvida.
+                sem.release()
+                deadline = loop.time() + 5
+                while web._slot_waiters != 0:
+                    self.assertLess(loop.time(), deadline, "esperador tardio não finalizou")
+                    await _asyncio.sleep(0.01)
+
+                # Requisição 3: deve executar normalmente.
+                acquired3 = await _asyncio.wait_for(
+                    web._acquire_inference_slot(timeout=5), timeout=10
+                )
+                self.assertTrue(acquired3, "requisição 3 deveria adquirir a vaga")
+                sem.release()
+
+                # Estado final: exatamente uma vaga disponível (sem vazamento).
+                self.assertTrue(sem.acquire(blocking=False), "vaga vazou após concessão tardia")
+                sem.release()
+            finally:
+                drained = 0
+                while sem.acquire(blocking=False):
+                    drained += 1
+                for _ in range(max(1, drained)):
+                    sem.release()
+
+        _asyncio.run(_scenario())
+
+    def test_slot_waiters_cap_enforced(self) -> None:
+        """Teto de esperadores simultâneos é aplicado (controle de concorrência)."""
+        import transcrita.web as web
+
+        saved = web._slot_waiters
         try:
-            mock_transcriber = MagicMock()
-            mock_transcriber.transcribe_file.return_value = [MagicMock(start=0.0, end=1.0, text="test")]
-            mock_transcriber_cls.return_value = mock_transcriber
-
-            with patch("transcrita.web.to_srt", return_value="1\n00:00:00,000 --> 00:00:01,000\ntest\n"):
-                files = {"file": ("audio.wav", io.BytesIO(b"fake"), "audio/wav")}
-                data = {"model": "base", "language": "pt", "device": "auto", "compute_type": "default", "beam_size": "5", "vad": "false"}
-
-                # Inicia requisição que vai ser cancelada durante aquisição
-                def make_request():
-                    return self.client.post("/api/transcribe", files=files, data=data)
-
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(make_request)
-                    time.sleep(0.05)  # Inicia aquisição
-                    # Cancela a requisição (simula timeout do cliente)
-                    # Verifica que semáforo não vazou restaurando original
-                    threading.Semaphore.acquire = original_acquire
-                    acquired = _inference_semaphore.acquire(timeout=1)
-                    self.assertTrue(acquired, "Semáforo não deveria ter vazado")
-                    _inference_semaphore.release()
+            web._slot_waiters = web.MAX_SLOT_WAITERS
+            self.assertFalse(web._slot_waiters_enter(), "teto deveria bloquear novo esperador")
+            web._slot_waiters = web.MAX_SLOT_WAITERS - 1
+            self.assertTrue(web._slot_waiters_enter())
+            web._slot_waiters_leave()
+            self.assertEqual(web._slot_waiters, web.MAX_SLOT_WAITERS - 1)
         finally:
-            threading.Semaphore.acquire = original_acquire
+            web._slot_waiters = saved
+
 
     def test_repeated_cancel_does_not_double_release(self) -> None:
         """Cancelamento repetido não provoca dupla liberação."""
