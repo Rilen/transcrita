@@ -1,0 +1,188 @@
+{
+  "diagnosis": {
+    "n": 16,
+    "ref_tokens": 265,
+    "wer_full": 0.10691729437859468,
+    "wer_a005": 0.1226911039024042,
+    "integrity_a005": 0.021726190476190475,
+    "lost_ref_tokens_a005": 3,
+    "duplicates_full": 3,
+    "duplicates_a005": 3,
+    "uncovered_speech_proxy": 0.006907712030793864
+  },
+  "fix_a2": {
+    "params": {
+      "threshold": 0.3,
+      "min_silence_ms": 550,
+      "min_speech_ms": 150,
+      "pad_ms": 250,
+      "max_speech_s": 25.0,
+      "merge_gap_s": 0.35
+    },
+    "wer": 0.10691729437859468,
+    "integrity": 0.0,
+    "lost_ref_tokens": 0,
+    "srt_valid_rate": 1.0,
+    "rtf": 0.05142375618077096
+  },
+  "reconciled": {
+    "rtf": 0.5538234911633169,
+    "ok": 16,
+    "srt_valid_rate": 1.0,
+    "text_equal_full_controlled": true,
+    "origin": "texto do passe integral + tempos estimados (sem invenção)"
+  },
+  "controlled": {
+    "a005": {
+      "boundary_025": {
+        "ref_segments": 6,
+        "pred_segments": 9,
+        "matched_within_tol": 6,
+        "recall": 1.0,
+        "mae_matched_s": 0.09299999999999953,
+        "tol_s": 0.25
+      },
+      "boundary_050": {
+        "ref_segments": 6,
+        "pred_segments": 9,
+        "matched_within_tol": 6,
+        "recall": 1.0,
+        "mae_matched_s": 0.09299999999999953,
+        "tol_s": 0.5
+      },
+      "coverage": {
+        "covered_s": 39.55399999999999,
+        "coverage": 0.8530084106103082
+      },
+      "integrity": {
+        "wer_vs_full": 0.009433962264150943,
+        "chars_lost": 0
+      },
+      "validity": {
+        "invalid_segments": 0,
+        "valid": true
+      }
+    },
+    "a2": {
+      "boundary_025": {
+        "ref_segments": 6,
+        "pred_segments": 8,
+        "matched_within_tol": 4,
+        "recall": 0.6666666666666666,
+        "mae_matched_s": 0.1449999999999998,
+        "tol_s": 0.25
+      },
+      "boundary_050": {
+        "ref_segments": 6,
+        "pred_segments": 8,
+        "matched_within_tol": 6,
+        "recall": 1.0,
+        "mae_matched_s": 0.1816666666666662,
+        "tol_s": 0.5
+      },
+      "coverage": {
+        "covered_s": 41.71,
+        "coverage": 0.8995039896484797
+      },
+      "integrity": {
+        "wer_vs_full": 0.018867924528301886,
+        "chars_lost": 0
+      },
+      "validity": {
+        "invalid_segments": 0,
+        "valid": true
+      }
+    },
+    "reconciled": {
+      "boundary_025": {
+        "ref_segments": 6,
+        "pred_segments": 8,
+        "matched_within_tol": 4,
+        "recall": 0.6666666666666666,
+        "mae_matched_s": 0.1449999999999998,
+        "tol_s": 0.25
+      },
+      "boundary_050": {
+        "ref_segments": 6,
+        "pred_segments": 8,
+        "matched_within_tol": 6,
+        "recall": 1.0,
+        "mae_matched_s": 0.1816666666666662,
+        "tol_s": 0.5
+      },
+      "coverage": {
+        "covered_s": 41.71,
+        "coverage": 0.8995039896484797
+      },
+      "integrity": {
+        "wer_vs_full": 0.0,
+        "chars_lost": 0
+      },
+      "validity": {
+        "invalid_segments": 0,
+        "valid": true
+      },
+      "text_equal_full": true
+    }
+  },
+  "rss_peak_mb": {
+    "full": 3657.828125,
+    "a005": 3657.8359375,
+    "a2": 3657.84375,
+    "rec": 3829.515625
+  },
+  "sweep": [
+    {
+      "pad": 150,
+      "merge": 0.35,
+      "th": 0.3,
+      "integrity_mean": 0.026785714285714284,
+      "integrity_max": 0.42857142857142855,
+      "wer": 0.11472979437859468,
+      "cov": 0.8693120552081086,
+      "recall025": 1.0,
+      "mae025": 0.09833333333333287,
+      "recall050": 1.0,
+      "pred": 8
+    },
+    {
+      "pad": 200,
+      "merge": 0.35,
+      "th": 0.3,
+      "integrity_mean": 0.002976190476190476,
+      "integrity_max": 0.047619047619047616,
+      "wer": 0.10394110390240421,
+      "cov": 0.8844080224282943,
+      "recall025": 1.0,
+      "mae025": 0.14000000000000026,
+      "recall050": 1.0,
+      "pred": 8
+    },
+    {
+      "pad": 250,
+      "merge": 0.35,
+      "th": 0.3,
+      "integrity_mean": 0.0,
+      "integrity_max": 0.0,
+      "wer": 0.10691729437859468,
+      "cov": 0.8995039896484797,
+      "recall025": 0.6666666666666666,
+      "mae025": 0.1449999999999998,
+      "recall050": 1.0,
+      "pred": 8
+    },
+    {
+      "pad": 250,
+      "merge": 0.5,
+      "th": 0.3,
+      "integrity_mean": 0.002403846153846154,
+      "integrity_max": 0.038461538461538464,
+      "wer": 0.10932114053244084,
+      "cov": 0.9313349148156136,
+      "recall025": 0.5,
+      "mae025": 0.12533333333333285,
+      "recall050": 0.5,
+      "pred": 5
+    }
+  ]
+}
