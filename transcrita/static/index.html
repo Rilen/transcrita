@@ -860,7 +860,15 @@
       <h3>⚙️ Configurações</h3>
       <div class="settings-card">
         <div class="field">
-          <label>Modelo</label>
+          <label for="engineSelect">Motor de transcrição</label>
+          <select id="engineSelect" aria-describedby="engineNote">
+            <option value="whisper" selected>Whisper — Estável</option>
+            <option value="parakeet" disabled>Parakeet PT-BR — Experimental</option>
+          </select>
+          <p class="field-note" id="engineNote"></p>
+        </div>
+        <div class="field">
+          <label for="modelSelect">Modelo</label>
           <select id="modelSelect">
             <option value="tiny">tiny</option>
             <option value="base" selected>base</option>
@@ -934,7 +942,10 @@
     <div class="transcription-area">
       <div class="results-card" id="resultsCard" style="display:none">
         <div class="results-header">
-          <span id="resultsTitle">Transcrição · <strong>0</strong> de <strong>0</strong> selecionados</span>
+          <span>
+            <span id="resultsTitle">Transcrição · <strong>0</strong> de <strong>0</strong> selecionados</span>
+            <span id="engineInfo" style="font-size:0.85rem;opacity:0.8;display:block"></span>
+          </span>
           <div class="results-actions">
             <button type="button" class="btn" id="copyBtn">Copiar</button>
             <button type="button" class="btn primary" id="downloadTxtBtn">Baixar .txt</button>
@@ -991,6 +1002,56 @@
   const errorMessage = document.getElementById('errorMessage');
   const resultsCard = document.getElementById('resultsCard');
   const resultsTitle = document.getElementById('resultsTitle');
+  const engineSelect = document.getElementById('engineSelect');
+  const engineNote = document.getElementById('engineNote');
+  const engineInfo = document.getElementById('engineInfo');
+
+  const WHISPER_MODELS = [
+    ['tiny', 'tiny'], ['base', 'base'], ['small', 'small'],
+    ['medium', 'medium'], ['large-v3', 'large-v3'], ['large-v3-turbo', 'large-v3-turbo'],
+  ];
+  let enginesCache = [];
+
+  function applyEngineModels(preferredModel) {
+    const engine = engineSelect.value;
+    const spec = enginesCache.find(e => e.id === engine);
+    const previous = preferredModel || document.getElementById('modelSelect').value;
+    const select = document.getElementById('modelSelect');
+    if (engine === 'parakeet') {
+      select.innerHTML = '<option value="pt-br-int8">PT-BR INT8</option>';
+    } else {
+      select.innerHTML = WHISPER_MODELS.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+      select.value = WHISPER_MODELS.some(([v]) => v === previous) ? previous : 'base';
+    }
+    if (spec) {
+      const state = spec.experimental ? 'Experimental' : 'Estável';
+      const ts = spec.supports_timestamps ? `timestamps por ${spec.timestamp_scope}` : 'sem timestamps';
+      engineNote.textContent = spec.available
+        ? `${state} · ${ts}`
+        : `Indisponível: ${spec.unavailable_reason || 'motivo desconhecido'}`;
+    }
+  }
+
+  async function loadEngines() {
+    try {
+      const resp = await fetch('api/engines');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      enginesCache = data.engines || [];
+      const pk = enginesCache.find(e => e.id === 'parakeet');
+      const option = engineSelect.querySelector('option[value="parakeet"]');
+      if (pk && option) {
+        option.disabled = !pk.available;
+        option.textContent = pk.available
+          ? 'Parakeet PT-BR — Experimental'
+          : 'Parakeet PT-BR — Indisponível';
+      }
+      applyEngineModels();
+    } catch (e) { /* mantém padrão Whisper */ }
+  }
+
+  engineSelect.addEventListener('change', () => applyEngineModels());
+  loadEngines();
   const emptyState = document.getElementById('emptyState');
   const outputText = document.getElementById('outputText');
   const outputTextFooter = document.getElementById('outputTextFooter');
@@ -1401,6 +1462,7 @@
 
         const formData = new FormData();
         formData.append('file', item.file);
+        formData.append('engine', engineSelect.value);
         formData.append('model', document.getElementById('modelSelect').value);
         formData.append('language', document.getElementById('languageSelect').value);
         formData.append('device', 'auto');
@@ -1447,6 +1509,7 @@
   async function processFileSse(item, fileNum, totalFiles) {
     const formData = new FormData();
     formData.append('file', item.file);
+    formData.append('engine', engineSelect.value);
     formData.append('model', document.getElementById('modelSelect').value);
     formData.append('language', document.getElementById('languageSelect').value);
     formData.append('device', 'auto');
@@ -1516,6 +1579,11 @@
         updateConsolidatedText();
       }
     } else if (type === 'done') {
+      if (event.engine) {
+        const label = event.engine_name || event.engine;
+        const exp = event.experimental ? ' (experimental)' : '';
+        engineInfo.textContent = `Motor efetivo: ${label}${exp} · modelo ${event.model_label || event.model}`;
+      }
       item.filename = event.filename || item.filename;
       item.text = event.text || '';
       item.progress = 100;

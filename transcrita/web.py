@@ -25,6 +25,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from transcrita import __version__
 from transcrita.core import Transcriber
 from transcrita.srt import to_srt
+from transcrita.asr import (
+    engine_metadata,
+    list_engines,
+    parakeet_availability,
+    parakeet_enabled,
+    parakeet_weights_path,
+)
 
 logger = logging.getLogger("transcrita.web")
 
@@ -164,6 +171,73 @@ _transcriber_cache: dict = {
     "instance": None,  # Transcriber | None
 }
 
+# Vaga única de modelo: Whisper e Parakeet nunca ficam carregados ao mesmo tempo.
+_model_switch_lock = threading.Lock()
+_parakeet_lock = threading.Lock()
+_parakeet_cache: dict = {"key": None, "instance": None}
+
+
+def _evict_whisper() -> None:
+    with _transcriber_lock:
+        if _transcriber_cache["instance"] is not None:
+            _transcriber_cache["key"] = None
+            _transcriber_cache["instance"] = None
+            gc.collect()
+
+
+def _evict_parakeet() -> None:
+    with _parakeet_lock:
+        instance = _parakeet_cache["instance"]
+        _parakeet_cache["key"] = None
+        _parakeet_cache["instance"] = None
+    if instance is not None:
+        try:
+            instance.unload()
+        finally:
+            gc.collect()
+
+
+def _get_parakeet_engine(model: str = "pt-br-int8") -> object:
+    """Retorna o motor Parakeet em cache (single-model), criando se necessário."""
+    key = ("parakeet", model)
+    with _model_switch_lock:
+        _evict_whisper()
+        with _parakeet_lock:
+            if _parakeet_cache["key"] == key and _parakeet_cache["instance"] is not None:
+                return _parakeet_cache["instance"]
+            from transcrita.asr.parakeet import ParakeetEngine
+
+            engine = ParakeetEngine(parakeet_weights_path())
+            _parakeet_cache["key"] = key
+            _parakeet_cache["instance"] = engine
+            return engine
+
+
+def _get_engine(engine_id: str, model: str, device: str, compute_type: str) -> object:
+    if engine_id == "parakeet":
+        return _get_parakeet_engine(model)
+    return _get_transcriber(model, device, compute_type)
+
+
+def _resolve_engine(engine_id: str, model: str) -> None:
+    """Valida o motor solicitado; erros explícitos, sem fallback silencioso."""
+    if engine_id not in ("whisper", "parakeet"):
+        raise HTTPException(status_code=400, detail=f"motor desconhecido: {engine_id}")
+    if engine_id == "parakeet":
+        if not parakeet_enabled():
+            raise HTTPException(
+                status_code=403,
+                detail="Parakeet desabilitado (TRANSCRITA_ENABLE_PARAKEET=false)",
+            )
+        ok, reason = parakeet_availability()
+        if not ok:
+            raise HTTPException(status_code=503, detail=f"Parakeet indisponível: {reason}")
+        if model != "pt-br-int8":
+            raise HTTPException(
+                status_code=400,
+                detail="Parakeet aceita somente o modelo pt-br-int8",
+            )
+
 
 def _get_transcriber(
     model_size: str,
@@ -178,19 +252,22 @@ def _get_transcriber(
     """
     key = (model_size, device, compute_type)
 
-    with _transcriber_lock:
-        current_key = _transcriber_cache["key"]
-        current_instance = _transcriber_cache["instance"]
+    with _model_switch_lock:
+        _evict_parakeet()
+        with _transcriber_lock:
+            current_key = _transcriber_cache["key"]
+            current_instance = _transcriber_cache["instance"]
 
-        if current_key == key and current_instance is not None:
-            return current_instance
+            if current_key == key and current_instance is not None:
+                return current_instance
 
         # Evicção do modelo anterior
+        with _transcriber_lock:
+            if current_instance is not None:
+                _transcriber_cache["key"] = None
+                _transcriber_cache["instance"] = None
         if current_instance is not None:
             del current_instance
-            _transcriber_cache["key"] = None
-            _transcriber_cache["instance"] = None
-
             gc.collect()
             try:
                 import torch  # type: ignore
@@ -206,8 +283,9 @@ def _get_transcriber(
             device=device,
             compute_type=compute_type,
         )
-        _transcriber_cache["key"] = key
-        _transcriber_cache["instance"] = transcriber
+        with _transcriber_lock:
+            _transcriber_cache["key"] = key
+            _transcriber_cache["instance"] = transcriber
         return transcriber
 
 
@@ -226,9 +304,16 @@ async def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+@app.get("/api/engines")
+async def engines() -> JSONResponse:
+    """Lista motores, modelos, disponibilidade e limitações."""
+    return JSONResponse({"engines": list_engines()})
+
+
 @app.post("/api/transcribe")
 async def transcribe(
     file: UploadFile = File(...),
+    engine: str = Form("whisper"),
     model: str = Form("base"),
     language: str = Form("pt"),
     device: str = Form("auto"),
@@ -241,6 +326,7 @@ async def transcribe(
     Endpoint mantido para compatibilidade retroativa com a CLI anterior.
     """
     resolved_language: Optional[str] = None if language == "auto" else language
+    _resolve_engine(engine, model)
 
     start_wall = time.perf_counter()
 
@@ -251,7 +337,7 @@ async def transcribe(
         raise HTTPException(status_code=503, detail="Servidor ocupado, tente novamente")
 
     try:
-        transcriber = _get_transcriber(model, device, compute_type)
+        transcriber = _get_engine(engine, model, device, compute_type)
 
         original_name = file.filename or "audio"
         stem = Path(original_name).stem
@@ -297,10 +383,12 @@ async def transcribe(
         srt_content = to_srt(segments)
 
         elapsed = time.perf_counter() - start_wall
+        meta = engine_metadata(engine, model)
         logger.info(
             "transcricao_concluida",
             extra={
                 "arquivo": original_name,
+                "motor": engine,
                 "modelo": model,
                 "dispositivo": device,
                 "tempo_proc_s": round(elapsed, 2),
@@ -314,6 +402,7 @@ async def transcribe(
                 "filename": stem,
                 "text": full_text,
                 "srt": srt_content,
+                **meta,
             }
         )
     finally:
@@ -324,6 +413,7 @@ async def transcribe(
 async def transcribe_stream(
     request: Request,
     file: UploadFile = File(...),
+    engine: str = Form("whisper"),
     model: str = Form("base"),
     language: str = Form("pt"),
     device: str = Form("auto"),
@@ -342,6 +432,8 @@ async def transcribe_stream(
     trabalho para a transcrição no próximo segmento.
     """
     resolved_language: Optional[str] = None if language == "auto" else language
+    _resolve_engine(engine, model)
+    meta = engine_metadata(engine, model)
     original_name = file.filename or "audio"
     stem = Path(original_name).stem
     suffix = Path(original_name).suffix
@@ -384,11 +476,11 @@ async def transcribe_stream(
                     nonlocal worker_started
                     try:
                         worker_started = True
-                        yield_status("Carregando modelo...")
-                        transcriber = _get_transcriber(
-                            model, device, compute_type
+                        yield_status(f"Carregando {meta['engine_name']} ({meta['model_label']})...")
+                        transcriber = _get_engine(engine, model, device, compute_type)
+                        yield_status(
+                            "Segmentando áudio (VAD)..." if engine == "parakeet" else "Extraindo áudio..."
                         )
-                        yield_status("Extraindo áudio...")
                         segments = transcriber.transcribe_file(
                             str(tmp_path),
                             beam_size=beam_size,
@@ -399,7 +491,7 @@ async def transcribe_stream(
                             ffmpeg_timeout=300,
                         )
                         if cancel_event.is_set():
-                            q.put({"type": "cancelled", "filename": stem})
+                            q.put({"type": "cancelled", "filename": stem, **meta})
                         else:
                             full_text = " ".join(
                                 seg.text.strip() for seg in segments if seg.text.strip()
@@ -411,6 +503,7 @@ async def transcribe_stream(
                                     "filename": stem,
                                     "text": full_text,
                                     "srt": srt_content,
+                                    **meta,
                                 }
                             )
                     except Exception as exc:  # noqa: BLE001
@@ -419,6 +512,7 @@ async def transcribe_stream(
                                 {
                                     "type": "error",
                                     "detail": f"falha na transcrição: {exc}",
+                                    **meta,
                                 }
                             )
                     finally:
@@ -442,7 +536,10 @@ async def transcribe_stream(
                         # NÃO libera semáforo aqui - apenas sinaliza cancelamento
                         # O semáforo será liberado quando o worker terminar (finally)
                         try:
-                            cancelled_event = json.dumps({"type": "cancelled", "filename": stem}, ensure_ascii=False)
+                            cancelled_event = json.dumps(
+                                {"type": "cancelled", "filename": stem, **meta},
+                                ensure_ascii=False,
+                            )
                             yield f"data: {cancelled_event}\n\n"
                         except Exception:
                             pass
@@ -497,6 +594,7 @@ async def transcribe_stream(
         "sse_iniciado",
         extra={
             "arquivo": original_name,
+            "motor": engine,
             "modelo": model,
             "dispositivo": device,
             "tempo_ate_inicio_s": round(elapsed, 2),
