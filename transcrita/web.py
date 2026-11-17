@@ -174,9 +174,8 @@ async def transcribe(
     start_wall = time.perf_counter()
 
     # Serialização global de inferências (async acquire para não bloquear event loop)
-    try:
-        await asyncio.to_thread(_inference_semaphore.acquire, timeout=300)
-    except RuntimeError:
+    acquired = await asyncio.to_thread(_inference_semaphore.acquire, timeout=300)
+    if not acquired:
         raise HTTPException(status_code=503, detail="Servidor ocupado, tente novamente")
 
     try:
