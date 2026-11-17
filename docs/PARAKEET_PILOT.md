@@ -4,7 +4,9 @@
 - Modelo: `calneymgp/parakeet-tdt-0.6b-v3-ptBR-TAGARELA-onnx-int8` (INT8 dinâmico comunitário).
 - Licença: **CC-BY-4.0** (atribuição obrigatória; ver `THIRD_PARTY_NOTICES.md`).
 - Proveniência: NVIDIA Parakeet TDT 0.6B v3 → fine-tune TAGARELA → export ONNX → quantização INT8.
+- Revisão HF do checkpoint: `7d84392553633a8e5bdca7eccb5ae25467e9572f`.
 - Integridade: definir `TRANSCRITA_PARAKEET_SHA256` (SHA-256 de `encoder-model.int8.onnx`).
+  Valor de referência do checkpoint acima: `89e33f4b8c5186a7034947f07e41af36b853ab638c5a16be37d55774722b8fc5`.
 - Dependências: `pip install -e ".[web,parakeet]"` **somente no ambiente de piloto**.
 
 ## Configuração
