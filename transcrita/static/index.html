@@ -944,7 +944,7 @@
         <div class="results-header">
           <span>
             <span id="resultsTitle">Transcrição · <strong>0</strong> de <strong>0</strong> selecionados</span>
-            <span id="engineInfo" style="font-size:0.85rem;opacity:0.8;display:block"></span>
+            <span id="engineInfo" aria-live="polite" style="font-size:0.85rem;opacity:0.8;display:block"></span>
           </span>
           <div class="results-actions">
             <button type="button" class="btn" id="copyBtn">Copiar</button>
@@ -1017,6 +1017,14 @@
     const spec = enginesCache.find(e => e.id === engine);
     const previous = preferredModel || document.getElementById('modelSelect').value;
     const select = document.getElementById('modelSelect');
+    const isParakeet = engine === 'parakeet';
+    const beamInput = document.getElementById('beamSizeInput');
+    const vadBox = document.getElementById('vadCheckbox');
+    if (beamInput) beamInput.disabled = isParakeet;
+    if (vadBox) {
+      vadBox.disabled = isParakeet;
+      if (isParakeet) vadBox.checked = false;
+    }
     if (engine === 'parakeet') {
       select.innerHTML = '<option value="pt-br-int8">PT-BR INT8</option>';
     } else {
@@ -1026,10 +1034,20 @@
     if (spec) {
       const state = spec.experimental ? 'Experimental' : 'Estável';
       const ts = spec.supports_timestamps ? `timestamps por ${spec.timestamp_scope}` : 'sem timestamps';
+      const scope = isParakeet
+        ? ' · VAD interno fixo (A2/A3); beam não se aplica'
+        : ' · VAD e beam configuráveis';
       engineNote.textContent = spec.available
-        ? `${state} · ${ts}`
+        ? `${state} · ${ts}${scope}`
         : `Indisponível: ${spec.unavailable_reason || 'motivo desconhecido'}`;
     }
+  }
+
+  function appendDecodingParams(formData, engine) {
+    // Parakeet usa VAD interno fixo e não possui beam search configurável.
+    if (engine === 'parakeet') return;
+    formData.append('beam_size', document.getElementById('beamSizeInput').value);
+    formData.append('vad', document.getElementById('vadCheckbox').checked ? 'true' : 'false');
   }
 
   async function loadEngines() {
@@ -1467,8 +1485,7 @@
         formData.append('language', document.getElementById('languageSelect').value);
         formData.append('device', 'auto');
         formData.append('compute_type', 'default');
-        formData.append('beam_size', document.getElementById('beamSizeInput').value);
-        formData.append('vad', document.getElementById('vadCheckbox').checked ? 'true' : 'false');
+        appendDecodingParams(formData, engineSelect.value);
 
         progressStatus.textContent = `Arquivo ${i + 1} de ${queue.length} — Enviando&hellip;`;
 
@@ -1514,8 +1531,7 @@
     formData.append('language', document.getElementById('languageSelect').value);
     formData.append('device', 'auto');
     formData.append('compute_type', 'default');
-    formData.append('beam_size', document.getElementById('beamSizeInput').value);
-    formData.append('vad', document.getElementById('vadCheckbox').checked ? 'true' : 'false');
+    appendDecodingParams(formData, engineSelect.value);
 
     const response = await fetch('api/transcribe/stream', {
       method: 'POST',
