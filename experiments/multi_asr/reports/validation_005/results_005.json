@@ -1,0 +1,518 @@
+{
+  "params": {
+    "vad": {
+      "threshold": 0.35,
+      "min_silence_ms": 500,
+      "min_speech_ms": 200,
+      "max_speech_s": 25.0,
+      "pad_ms": 150
+    },
+    "hybrid": {
+      "max_segment_s": 12.0,
+      "pause_s": 1.0
+    },
+    "models": {
+      "parakeet": "parakeet-ptbr-tagarela-int8",
+      "whisper": "whisper-large-v3-turbo"
+    }
+  },
+  "quality": {
+    "pk_wer": 0.10691729437859468,
+    "w_wer": 0.13785217029702324,
+    "by_scenario": {
+      "prepared": {
+        "n": 6,
+        "pk_wer": 0.1087789661319073,
+        "w_wer": 0.14724050459344576,
+        "a_coverage": 0.949319822952937,
+        "a_integrity": 0.0,
+        "c_coverage": 0.9409311486018165
+      },
+      "spontaneous_dialogue": {
+        "n": 6,
+        "pk_wer": 0.11318092239144871,
+        "w_wer": 0.15056471306471306,
+        "a_coverage": 0.9390341679849014,
+        "a_integrity": 0.007936507936507936,
+        "c_coverage": 0.8373672210782942
+      },
+      "spontaneous_interview": {
+        "n": 4,
+        "pk_wer": 0.09472934472934473,
+        "w_wer": 0.1047008547008547,
+        "a_coverage": 0.8519256425555094,
+        "a_integrity": 0.075,
+        "c_coverage": 0.8192325611898664
+      }
+    }
+  },
+  "strategy_a_tuned": {
+    "valid_rate": 1.0,
+    "coverage": 0.9211141572405668,
+    "integrity_wer": 0.021726190476190475,
+    "rtf": 0.04281771676590741,
+    "control_boundary_025": {
+      "ref_segments": 6,
+      "pred_segments": 9,
+      "matched_within_tol": 6,
+      "recall": 1.0,
+      "mae_matched_s": 0.09299999999999953,
+      "tol_s": 0.25
+    },
+    "control_boundary_050": {
+      "ref_segments": 6,
+      "pred_segments": 9,
+      "matched_within_tol": 6,
+      "recall": 1.0,
+      "mae_matched_s": 0.09299999999999953,
+      "tol_s": 0.5
+    },
+    "control_frag": {
+      "n_segments": 9,
+      "per_minute": 11.645460427000216,
+      "median_len_s": 4.460000000000001,
+      "min_len_s": 1.4959999999999951
+    },
+    "control_validity": {
+      "invalid_segments": 0,
+      "valid": true
+    }
+  },
+  "strategy_a_default": {
+    "valid_rate": 1.0,
+    "coverage": 0.8659024669969865,
+    "integrity_wer": 0.0532997557997558,
+    "rtf": 0.06418229032628453
+  },
+  "strategy_c": {
+    "valid_rate": 1.0,
+    "coverage": 0.8716700289275081,
+    "integrity_wer": 0.0,
+    "rtf": 0.5623889003067843,
+    "control_boundary_025": {
+      "ref_segments": 6,
+      "pred_segments": 6,
+      "matched_within_tol": 3,
+      "recall": 0.5,
+      "mae_matched_s": 0.08333333333333333,
+      "tol_s": 0.25
+    },
+    "control_frag": {
+      "n_segments": 6,
+      "per_minute": 7.7636402846668116,
+      "median_len_s": 8.709999999999997,
+      "min_len_s": 1.2599999999999998
+    }
+  },
+  "strategy_b_mms_fa": {
+    "reference_text": {
+      "ref_segments": 6,
+      "pred_segments": 12,
+      "matched_within_tol": 6,
+      "recall": 1.0,
+      "mae_matched_s": 0.0869999999999993,
+      "tol_s": 0.25
+    },
+    "parakeet_text": {
+      "ref_segments": 6,
+      "pred_segments": 11,
+      "matched_within_tol": 6,
+      "recall": 1.0,
+      "mae_matched_s": 0.07033333333333298,
+      "tol_s": 0.25
+    },
+    "proc_s": {
+      "reference_text": 2.721547618974,
+      "parakeet_text": 2.8492130000377074
+    },
+    "segments": {
+      "reference_text": [
+        {
+          "start": 0.04,
+          "end": 0.12,
+          "text": "Em"
+        },
+        {
+          "start": 1.58,
+          "end": 4.861,
+          "text": "eu tinha três anos e meu pai foi embora de casa."
+        },
+        {
+          "start": 6.101,
+          "end": 10.582,
+          "text": "Então, nesse ano, com anos, fui convidada, pela maior editora do país,"
+        },
+        {
+          "start": 12.203,
+          "end": 13.083,
+          "text": "a escrever um livro."
+        },
+        {
+          "start": 14.203,
+          "end": 15.563,
+          "text": "Meu tio veio pra Brasília em"
+        },
+        {
+          "start": 17.104,
+          "end": 18.204,
+          "text": "carregando essa mala aqui."
+        },
+        {
+          "start": 19.444,
+          "end": 24.625,
+          "text": "Tem uma pesquisa que foi feita no Canadá por uma pesquisadora brasileira, com bebês."
+        },
+        {
+          "start": 25.926,
+          "end": 29.846,
+          "text": "A sepse, desde que foi identificada como disfunção orgânica,"
+        },
+        {
+          "start": 31.127,
+          "end": 34.767,
+          "text": "já vitimou mais de milhões de pessoas no mundo todo."
+        },
+        {
+          "start": 35.928,
+          "end": 39.248,
+          "text": "A cada dois minutos, a sepse mata uma pessoa no mundo todo"
+        },
+        {
+          "start": 41.169,
+          "end": 42.709,
+          "text": "e, no dia de maio de"
+        },
+        {
+          "start": 45.05,
+          "end": 46.31,
+          "text": "a sepse matou a minha filha."
+        }
+      ],
+      "parakeet_text": 11
+    }
+  },
+  "tuning": {
+    "vad": [
+      {
+        "cfg": {
+          "threshold": 0.5,
+          "min_silence_ms": 400,
+          "min_speech_ms": 250,
+          "pad_ms": 100,
+          "max_speech_s": 25.0
+        },
+        "n": 15,
+        "valid": true,
+        "coverage": 0.788483933577744,
+        "frag_per_min": 19.409100711667026,
+        "median_len": 2.663999999999998,
+        "integrity_wer": 0.02830188679245283,
+        "ts_valid": true,
+        "boundary_silence": {
+          "ref_segments": 6,
+          "pred_segments": 15,
+          "matched_within_tol": 6,
+          "recall": 1.0,
+          "mae_matched_s": 0.053333333333332934,
+          "tol_s": 0.25
+        },
+        "boundary_onset": {
+          "ref_segments": 6,
+          "pred_segments": 15,
+          "matched_within_tol": 2,
+          "recall": 0.3333333333333333,
+          "mae_matched_s": 0.0029999999999996696,
+          "tol_s": 0.25
+        }
+      },
+      {
+        "cfg": {
+          "threshold": 0.35,
+          "min_silence_ms": 500,
+          "min_speech_ms": 200,
+          "pad_ms": 300,
+          "max_speech_s": 25.0
+        },
+        "n": 9,
+        "valid": true,
+        "coverage": 0.9047660125080872,
+        "frag_per_min": 11.645460427000216,
+        "median_len": 4.76,
+        "integrity_wer": 0.009433962264150943,
+        "ts_valid": true,
+        "boundary_silence": {
+          "ref_segments": 6,
+          "pred_segments": 9,
+          "matched_within_tol": 3,
+          "recall": 0.5,
+          "mae_matched_s": 0.1479999999999985,
+          "tol_s": 0.25
+        },
+        "boundary_onset": {
+          "ref_segments": 6,
+          "pred_segments": 9,
+          "matched_within_tol": 1,
+          "recall": 0.16666666666666666,
+          "mae_matched_s": 0.0,
+          "tol_s": 0.25
+        }
+      },
+      {
+        "cfg": {
+          "threshold": 0.3,
+          "min_silence_ms": 600,
+          "min_speech_ms": 200,
+          "pad_ms": 400,
+          "max_speech_s": 20.0
+        },
+        "n": 8,
+        "valid": true,
+        "coverage": 0.944791891309036,
+        "frag_per_min": 10.351520379555748,
+        "median_len": 5.192,
+        "integrity_wer": 0.03773584905660377,
+        "ts_valid": true,
+        "boundary_silence": {
+          "ref_segments": 6,
+          "pred_segments": 8,
+          "matched_within_tol": 1,
+          "recall": 0.16666666666666666,
+          "mae_matched_s": 0.0,
+          "tol_s": 0.25
+        },
+        "boundary_onset": {
+          "ref_segments": 6,
+          "pred_segments": 8,
+          "matched_within_tol": 1,
+          "recall": 0.16666666666666666,
+          "mae_matched_s": 0.0,
+          "tol_s": 0.25
+        }
+      },
+      {
+        "cfg": {
+          "threshold": 0.35,
+          "min_silence_ms": 500,
+          "min_speech_ms": 200,
+          "pad_ms": 150,
+          "max_speech_s": 25.0
+        },
+        "n": 9,
+        "valid": true,
+        "coverage": 0.8530084106103082,
+        "frag_per_min": 11.645460427000216,
+        "median_len": 4.460000000000001,
+        "integrity_wer": 0.009433962264150943,
+        "ts_valid": true,
+        "boundary_silence": {
+          "ref_segments": 6,
+          "pred_segments": 9,
+          "matched_within_tol": 6,
+          "recall": 1.0,
+          "mae_matched_s": 0.09299999999999953,
+          "tol_s": 0.25
+        },
+        "boundary_onset": {
+          "ref_segments": 6,
+          "pred_segments": 9,
+          "matched_within_tol": 1,
+          "recall": 0.16666666666666666,
+          "mae_matched_s": 0.0,
+          "tol_s": 0.25
+        }
+      },
+      {
+        "cfg": {
+          "threshold": 0.4,
+          "min_silence_ms": 450,
+          "min_speech_ms": 200,
+          "pad_ms": 150,
+          "max_speech_s": 25.0
+        },
+        "n": 13,
+        "valid": true,
+        "coverage": 0.8319603191718781,
+        "frag_per_min": 16.821220616778092,
+        "median_len": 2.9879999999999995,
+        "integrity_wer": 0.018867924528301886,
+        "ts_valid": true,
+        "boundary_silence": {
+          "ref_segments": 6,
+          "pred_segments": 13,
+          "matched_within_tol": 6,
+          "recall": 1.0,
+          "mae_matched_s": 0.09299999999999953,
+          "tol_s": 0.25
+        },
+        "boundary_onset": {
+          "ref_segments": 6,
+          "pred_segments": 13,
+          "matched_within_tol": 1,
+          "recall": 0.16666666666666666,
+          "mae_matched_s": 0.0,
+          "tol_s": 0.25
+        }
+      }
+    ],
+    "hybrid": [
+      {
+        "cfg": {
+          "pause": 1.0,
+          "max": 12.0
+        },
+        "n": 6,
+        "valid": true,
+        "coverage": 0.9445762346344617,
+        "frag_per_min": 7.7636402846668116,
+        "median_len": 8.709999999999997,
+        "integrity_wer": 0.0,
+        "ts_valid": true,
+        "boundary_silence": {
+          "ref_segments": 6,
+          "pred_segments": 6,
+          "matched_within_tol": 3,
+          "recall": 0.5,
+          "mae_matched_s": 0.08333333333333333,
+          "tol_s": 0.25
+        },
+        "boundary_onset": {
+          "ref_segments": 6,
+          "pred_segments": 6,
+          "matched_within_tol": 1,
+          "recall": 0.16666666666666666,
+          "mae_matched_s": 0.0,
+          "tol_s": 0.25
+        }
+      },
+      {
+        "cfg": {
+          "pause": 0.7,
+          "max": 10.0
+        },
+        "n": 7,
+        "valid": true,
+        "coverage": 0.906189346560276,
+        "frag_per_min": 9.05758033211128,
+        "median_len": 5.679999999999993,
+        "integrity_wer": 0.0,
+        "ts_valid": true,
+        "boundary_silence": {
+          "ref_segments": 6,
+          "pred_segments": 7,
+          "matched_within_tol": 2,
+          "recall": 0.3333333333333333,
+          "mae_matched_s": 0.025000000000000355,
+          "tol_s": 0.25
+        },
+        "boundary_onset": {
+          "ref_segments": 6,
+          "pred_segments": 7,
+          "matched_within_tol": 1,
+          "recall": 0.16666666666666666,
+          "mae_matched_s": 0.0,
+          "tol_s": 0.25
+        }
+      },
+      {
+        "cfg": {
+          "pause": 1.4,
+          "max": 15.0
+        },
+        "n": 4,
+        "valid": true,
+        "coverage": 0.9499676514988137,
+        "frag_per_min": 5.175760189777874,
+        "median_len": 11.7,
+        "integrity_wer": 0.0,
+        "ts_valid": true,
+        "boundary_silence": {
+          "ref_segments": 6,
+          "pred_segments": 4,
+          "matched_within_tol": 1,
+          "recall": 0.16666666666666666,
+          "mae_matched_s": 0.0,
+          "tol_s": 0.25
+        },
+        "boundary_onset": {
+          "ref_segments": 6,
+          "pred_segments": 4,
+          "matched_within_tol": 1,
+          "recall": 0.16666666666666666,
+          "mae_matched_s": 0.0,
+          "tol_s": 0.25
+        }
+      }
+    ],
+    "reference": {
+      "silence_starts": [
+        {
+          "start": 0.0,
+          "end": 5.03,
+          "text": "Em 1996, eu tinha três anos e meu pai foi embora de casa."
+        },
+        {
+          "start": 6.03,
+          "end": 13.13,
+          "text": "Então, nesse ano, com 23 anos, fui convidada, pela maior editora do país, a escrever um livro."
+        },
+        {
+          "start": 14.13,
+          "end": 18.33,
+          "text": "Meu tio veio pra Brasília em 1972, carregando essa mala aqui."
+        },
+        {
+          "start": 19.33,
+          "end": 24.8,
+          "text": "Tem uma pesquisa que foi feita no Canadá por uma pesquisadora brasileira, com 30 bebês."
+        },
+        {
+          "start": 25.8,
+          "end": 34.83,
+          "text": "A sepse, desde que foi identificada como disfunção orgânica, já vitimou mais de 100 milhões de pessoas no mundo todo."
+        },
+        {
+          "start": 35.83,
+          "end": 46.37,
+          "text": "A cada dois minutos, a sepse mata uma pessoa no mundo todo e, no dia 28 de maio de 2010, a sepse matou a minha filha."
+        }
+      ],
+      "speech_onsets": [
+        {
+          "start": 0.0,
+          "end": 5.03
+        },
+        {
+          "start": 7.03,
+          "end": 13.13
+        },
+        {
+          "start": 15.13,
+          "end": 18.33
+        },
+        {
+          "start": 20.33,
+          "end": 24.8
+        },
+        {
+          "start": 26.8,
+          "end": 34.83
+        },
+        {
+          "start": 36.83,
+          "end": 46.37
+        }
+      ]
+    }
+  },
+  "totals": {
+    "audio_s": 103.39599999999999,
+    "a_proc_s": 4.4271806427277625,
+    "c_proc_s": 58.14876273612026,
+    "p_proc_s": 4.973226951318793,
+    "w_proc_s": 55.90883197821677,
+    "pk_rtf": 0.04809883313976163,
+    "w_rtf": 0.5407252889687877,
+    "a_rtf": 0.04281771676590741,
+    "c_rtf": 0.5623889003067843
+  }
+}
