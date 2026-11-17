@@ -127,13 +127,30 @@ async def _acquire_inference_slot(timeout: float = 300.0) -> bool:
 class UploadSizeLimitMiddleware:
     """Limite efetivo de upload (Content-Length e corpos chunked).
 
-    - Rejeita cedo quando Content-Length excede o limite.
-    - Para corpos sem Content-Length (chunked), conta bytes no receive e
-      levanta HTTP 413 sem bufferizar o corpo integral em memória.
+    O caminho é normalizado removendo apenas o `root_path` efetivo
+    (`scope["root_path"]` ou o configurado na app), preservando o roteamento
+    idêntico ao da aplicação e evitando bypass quando servida em subpath.
     """
 
-    def __init__(self, app):
+    def __init__(self, app, root_path: str = ""):
         self.app = app
+        self.root_path = (root_path or "").rstrip("/")
+
+    @staticmethod
+    def _strip_root(path: str, root: str) -> str:
+        if root and (path == root or path.startswith(root + "/")):
+            return path[len(root):] or "/"
+        return path
+
+    def _route_path(self, scope) -> str:
+        path = scope.get("path") or "/"
+        for root in (scope.get("root_path") or "", self.root_path):
+            root = (root or "").rstrip("/")
+            if root:
+                candidate = self._strip_root(path, root)
+                if candidate != path or path == root:
+                    return candidate
+        return path
 
     async def _reject(self, send) -> None:
         body = json.dumps(
@@ -150,7 +167,11 @@ class UploadSizeLimitMiddleware:
         await send({"type": "http.response.body", "body": body})
 
     async def __call__(self, scope, receive, send):
-        if scope.get("type") != "http" or scope.get("path") not in _UPLOAD_PATHS:
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+
+        route = self._route_path(scope)
+        if route not in _UPLOAD_PATHS:
             return await self.app(scope, receive, send)
 
         headers = {k.lower(): v for k, v in (scope.get("headers") or [])}
@@ -161,7 +182,7 @@ class UploadSizeLimitMiddleware:
                     logger.warning(
                         "upload_rejected_content_length",
                         extra={"content_length": int(declared), "max": MAX_UPLOAD_SIZE,
-                               "path": scope.get("path")},
+                               "rota": route},
                     )
                     return await self._reject(send)
             except ValueError:
@@ -178,7 +199,7 @@ class UploadSizeLimitMiddleware:
                     logger.warning(
                         "upload_rejected_chunked",
                         extra={"bytes_received": total, "max": MAX_UPLOAD_SIZE,
-                               "path": scope.get("path")},
+                               "rota": route},
                     )
                     raise HTTPException(
                         status_code=413,
@@ -196,7 +217,10 @@ app = FastAPI(
 )
 
 # Middleware de limite de upload
-app.add_middleware(UploadSizeLimitMiddleware)
+app.add_middleware(
+    UploadSizeLimitMiddleware,
+    root_path=os.environ.get("TRANSCRITA_ROOT_PATH", ""),
+)
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -487,9 +511,28 @@ async def transcribe_stream(
     cancel_event = threading.Event()
     worker_finished = threading.Event()
     semaphore_acquired = False
+    sse_state: dict = {"terminal": None}
+    segmentos = 0
+
+    def _log_terminal(event: str, **extra) -> None:
+        """Registra exatamente um evento terminal por requisição SSE."""
+        if sse_state["terminal"] is not None:
+            return
+        sse_state["terminal"] = event
+        logger.info(
+            event,
+            extra={
+                "motor": engine,
+                "modelo": model,
+                "duracao_s": round(time.perf_counter() - start_wall, 2),
+                "segmentos": segmentos,
+                **extra,
+            },
+        )
 
     async def event_generator():
-        nonlocal semaphore_acquired
+        nonlocal semaphore_acquired, segmentos
+        disconnect_task = None
         # Serialização global de inferências (espera em thread dedicada,
         # sem bloquear o event loop e sem vazar a vaga em caso de cancelamento).
         acquired = await _acquire_inference_slot(timeout=300)
@@ -511,6 +554,19 @@ async def transcribe_stream(
                         if not chunk:
                             break
                         buffer.write(chunk)
+
+                async def _watch_disconnect() -> None:
+                    while True:
+                        try:
+                            message = await request.receive()
+                        except (asyncio.CancelledError, Exception):
+                            return
+                        if message.get("type") == "http.disconnect":
+                            cancel_event.set()
+                            _log_terminal("sse_cancelado", motivo="cliente_desconectado")
+                            return
+
+                disconnect_task = asyncio.create_task(_watch_disconnect())
 
                 q: "queue.Queue[dict | None]" = queue.Queue()
 
@@ -536,6 +592,7 @@ async def transcribe_stream(
                             ffmpeg_timeout=300,
                         )
                         if cancel_event.is_set():
+                            logger.info("sse_worker_cancelado", extra={"segmentos": len(segments)})
                             q.put({"type": "cancelled", "filename": stem, **meta})
                         else:
                             full_text = " ".join(
@@ -552,7 +609,6 @@ async def transcribe_stream(
                                 }
                             )
                     except Exception as exc:  # noqa: BLE001
-                        logger.warning("sse_transcricao_falhou", extra={"erro": str(exc)})
                         if not cancel_event.is_set():
                             q.put(
                                 {
@@ -574,11 +630,8 @@ async def transcribe_stream(
                 while True:
                     # Detecta desconexão do cliente para cancelamento limpo
                     if await request.is_disconnected():
-                        logger.warning(
-                            "sse_cliente_desconectado",
-                            extra={"arquivo": original_name},
-                        )
                         cancel_event.set()
+                        _log_terminal("sse_cancelado", motivo="cliente_desconectado")
                         # NÃO libera semáforo aqui - apenas sinaliza cancelamento
                         # O semáforo será liberado quando o worker terminar (finally)
                         try:
@@ -604,9 +657,29 @@ async def transcribe_stream(
                     except Exception:
                         # Qualquer outro erro na leitura da fila
                         continue
+                    if sse_state["terminal"] == "sse_cancelado":
+                        break
                     if item is None:
                         break
+                    if item.get("type") == "segment":
+                        segmentos += 1
+                    elif item.get("type") == "done":
+                        _log_terminal("sse_concluido", motivo="done")
+                    elif item.get("type") == "cancelled":
+                        _log_terminal("sse_cancelado", motivo="worker_cancelado")
+                    elif item.get("type") == "error":
+                        _log_terminal(
+                            "sse_falha",
+                            motivo="worker_error",
+                            erro=item.get("detail", ""),
+                        )
                     yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+                if sse_state["terminal"] is None:
+                    if cancel_event.is_set():
+                        _log_terminal("sse_cancelado", motivo="worker_cancelado")
+                    else:
+                        _log_terminal("sse_concluido", motivo="done")
 
                 # Aguarda worker terminar (já deve ter terminado se chegou aqui)
                 try:
@@ -614,7 +687,16 @@ async def transcribe_stream(
                 except asyncio.CancelledError:
                     cancel_event.set()
                     raise
+        except asyncio.CancelledError:
+            cancel_event.set()
+            _log_terminal("sse_cancelado", motivo="tarefa_cancelada")
+            raise
+        except Exception as exc:  # noqa: BLE001
+            _log_terminal("sse_falha", motivo="excecao", erro=_sanitize_error(exc))
+            raise
         finally:
+            if disconnect_task is not None:
+                disconnect_task.cancel()
             # A vaga nunca é liberada antes de o worker terminar de fato.
             # Sem await aqui: seguro mesmo se o gerador for cancelado.
             if semaphore_acquired:
@@ -639,7 +721,6 @@ async def transcribe_stream(
     logger.info(
         "sse_iniciado",
         extra={
-            "arquivo": original_name,
             "motor": engine,
             "modelo": model,
             "dispositivo": device,
