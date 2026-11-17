@@ -70,8 +70,9 @@ class EngineContractTests(unittest.TestCase):
         self.assertTrue(parakeet["experimental"])
 
     def test_engines_list_flag_on_available(self) -> None:
+        # Mock na origem (transcrita.asr) para não depender de pesos/dependência no runner.
         with patch.dict(os.environ, {"TRANSCRITA_ENABLE_PARAKEET": "true"}), \
-             patch.object(web, "parakeet_availability", return_value=(True, "")):
+             patch("transcrita.asr.parakeet_availability", return_value=(True, "")):
             data = self.client.get("/api/engines").json()["engines"]
         parakeet = next(e for e in data if e["id"] == "parakeet")
         self.assertTrue(parakeet["enabled"])

@@ -1,0 +1,14 @@
+# Versões validadas localmente para a suíte (Ubuntu 24.04 / Python 3.12).
+# Atualize junto com a validação local; não fixe transitivas sem testar.
+anyio==4.16.0
+ctranslate2==4.9.0
+fastapi==0.163.1
+faster-whisper==1.2.1
+httpx2==2.16.2
+numpy==2.5.5
+onnxruntime==1.32.0
+pydantic==2.14.3
+python-multipart==0.0.34
+soundfile==0.14.0
+starlette==1.10.0
+uvicorn==0.54.0

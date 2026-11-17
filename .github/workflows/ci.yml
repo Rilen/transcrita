@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      # Governança: valida o próprio branch da missão mesmo sem PR (runner sem credenciais).
+      - chore/transcrita-011-ci-governance
+
+# Menor privilégio: o job apenas lê o código.
+permissions:
+  contents: read
+
+# Evita execuções duplicadas do mesmo commit (push + pull_request).
+concurrency:
+  group: ci-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: testes (Python 3.12, CPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependências (sem pesos, sem GPU)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[web,test]" -c .github/ci-constraints.txt
+
+      - name: Sanidade de importação (não baixa modelos)
+        run: |
+          python - <<'PY'
+          import transcrita.web  # import apenas; modelos são lazy/mockados nos testes
+          print("import ok")
+          PY
+
+      - name: Suíte completa
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -v 2>&1 | tee tests.log
+
+      - name: Resumo da execução
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### Transcrita — CI"
+            echo ""
+            echo "- Runner: Ubuntu (GitHub-hosted), Python 3.12"
+            echo "- Comando: \`python -m unittest discover -s tests -v\`"
+            echo "- SHA: \`${GITHUB_SHA}\`"
+            echo ""
+            echo '```'
+            tail -n 25 tests.log 2>/dev/null || echo "log indisponível"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
