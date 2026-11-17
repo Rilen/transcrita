@@ -23,6 +23,11 @@ parakeet = [
     "onnx-asr[cpu,hub]>=0.12,<0.13",
     "soundfile>=0.12",
 ]
+# Apenas o necessário para a suíte de testes (sem pesos, sem GPU).
+test = [
+    "httpx2>=2.16,<3",
+    "soundfile>=0.12",
+]
 
 [project.scripts]
 transcrita = "transcrita.cli:main"
