@@ -42,7 +42,7 @@ class ParakeetOnnxAdapter(ASRAdapter):
         if self._model is None:
             raise RuntimeError("modelo não carregado")
         start = time.perf_counter()
-        text = self._model.recognize(audio_path, language=language)
+        text = self._model.recognize(audio_path, language=language, channel="mean")
         elapsed = time.perf_counter() - start
         return TranscriptionResult(
             engine="onnx-asr/parakeet-tdt",

@@ -31,6 +31,71 @@ def error_rates(reference: str, hypothesis: str) -> dict[str, float]:
     }
 
 
+_NUMERIC = re.compile(r"\b\d+(?:[.,]\d+)*\b")
+
+
+def error_breakdown(reference: str, hypothesis: str) -> dict[str, float]:
+    """Substituições, deleções e inserções (contagens absolutas e por palavra)."""
+    import jiwer
+
+    ref = normalize_text(reference)
+    hyp = normalize_text(hypothesis)
+    if not ref:
+        return {"substitutions": 0.0, "deletions": 0.0, "insertions": 0.0, "hits": 0.0}
+    out = jiwer.process_words(ref, hyp)
+    return {
+        "substitutions": float(out.substitutions),
+        "deletions": float(out.deletions),
+        "insertions": float(out.insertions),
+        "hits": float(out.hits),
+    }
+
+
+def numeric_tokens(text: str) -> list[str]:
+    """Tokens numéricos normalizados (vírgula decimal convertida para ponto)."""
+    return [t.replace(",", ".") for t in _NUMERIC.findall(text or "")]
+
+
+def numeric_accuracy(references: list[str], hypotheses: list[str]) -> dict[str, float]:
+    """Cobertura exata de números da referência e números espúrios na hipótese."""
+    ref_all: list[str] = []
+    hyp_all: list[str] = []
+    ref_n = hyp_n = 0
+    for ref, hyp in zip(references, hypotheses):
+        refs = numeric_tokens(ref)
+        hyps = numeric_tokens(hyp)
+        ref_all.extend(refs)
+        hyp_all.extend(hyps)
+        ref_n += len(refs)
+        hyp_n += len(hyps)
+    from collections import Counter
+
+    ref_c, hyp_c = Counter(ref_all), Counter(hyp_all)
+    matched = sum(min(v, hyp_c.get(k, 0)) for k, v in ref_c.items())
+    spurious = hyp_n - matched
+    return {
+        "ref_numbers": float(ref_n),
+        "hyp_numbers": float(hyp_n),
+        "matched": float(matched),
+        "recall": (matched / ref_n) if ref_n else 0.0,
+        "spurious": float(spurious),
+    }
+
+
+def rare_token_recall(references: list[str], hypotheses: list[str], max_freq: int = 1) -> dict[str, float]:
+    """Recall de tokens raros do corpus (frequência <= max_freq nas referências)."""
+    from collections import Counter
+
+    ref_tokens = [t for r in references for t in normalize_text(r).split()]
+    freq = Counter(ref_tokens)
+    rare = {t for t, c in freq.items() if c <= max_freq and len(t) >= 4}
+    if not rare:
+        return {"rare_tokens": 0.0, "rare_recall": 0.0}
+    hyp_tokens = {t for h in hypotheses for t in normalize_text(h).split()}
+    hit = len(rare & hyp_tokens)
+    return {"rare_tokens": float(len(rare)), "rare_recall": hit / len(rare)}
+
+
 def aggregate(results: list[dict]) -> dict[str, float]:
     """Agrega métricas ponderando WER/CER por palavras de referência."""
     ok = [r for r in results if r.get("status") == "ok" and r.get("ref_words")]

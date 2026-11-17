@@ -37,7 +37,8 @@ def main(argv: list[str] | None = None) -> None:
     except RuntimeError:
         pass
 
-    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    raw_manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    manifest = raw_manifest["items"] if isinstance(raw_manifest, dict) else raw_manifest
     load_start = time.perf_counter()
     model = Qwen3ASRModel.from_pretrained(
         args.repo,
@@ -66,6 +67,8 @@ def main(argv: list[str] | None = None) -> None:
                     "processing_time": elapsed,
                     "rtf": (elapsed / duration) if duration else 0.0,
                     "status": "ok",
+                    "n_segments": 0,
+                    "timestamps_span": 0.0,
                     "text": text[:400],
                 }
             )

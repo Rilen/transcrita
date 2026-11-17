@@ -80,6 +80,8 @@ def run_model(
                         "processing_time": elapsed,
                         "rtf": (elapsed / duration) if duration else 0.0,
                         "status": res.status,
+                        "n_segments": len(res.segments),
+                        "timestamps_span": max((seg.end for seg in res.segments), default=0.0),
                         "text": res.text[:400],
                     }
                 )
@@ -146,7 +148,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.model not in configs:
         raise SystemExit(f"modelo desconhecido: {args.model}")
     cfg = configs[args.model]
-    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    raw_manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    manifest = raw_manifest["items"] if isinstance(raw_manifest, dict) else raw_manifest
 
     out = run_model(
         args.model,
