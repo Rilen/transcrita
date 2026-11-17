@@ -275,20 +275,19 @@ async def transcribe_stream(
     suffix = Path(original_name).suffix
     start_wall = time.perf_counter()
 
-    # Serialização global de inferências (adquire antes de salvar upload)
-    acquired = _inference_semaphore.acquire(timeout=300)
-    if not acquired:
-        return StreamingResponse(
-            iter([f"data: {json.dumps({'type': 'error', 'detail': 'Servidor ocupado, tente novamente'}, ensure_ascii=False)}\n\n"]),
-            media_type="text/event-stream",
-            status_code=503,
-        )
-
     cancel_event = threading.Event()
-    semaphore_acquired = True
+    worker_finished = threading.Event()
 
     async def event_generator():
-        nonlocal semaphore_acquired
+        # Serialização global de inferências (async acquire para não bloquear event loop)
+        acquired = await asyncio.to_thread(_inference_semaphore.acquire, timeout=300)
+        if not acquired:
+            yield f"data: {json.dumps({'type': 'error', 'detail': 'Servidor ocupado, tente novamente'}, ensure_ascii=False)}\n\n"
+            return
+
+        semaphore_acquired = True
+        worker_started = False
+
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 tmp_path = Path(tmpdir) / f"upload{suffix}"
@@ -307,7 +306,9 @@ async def transcribe_stream(
                     q.put({"type": "segment", **data})
 
                 def worker() -> None:
+                    nonlocal worker_started
                     try:
+                        worker_started = True
                         yield_status("Carregando modelo...")
                         transcriber = _get_transcriber(
                             model, device, compute_type
@@ -347,6 +348,7 @@ async def transcribe_stream(
                             )
                     finally:
                         q.put(None)  # sentinel para encerrar o gerador
+                        worker_finished.set()
 
                 def yield_status(message: str) -> None:
                     q.put({"type": "status", "message": message})
@@ -362,31 +364,34 @@ async def transcribe_stream(
                             extra={"arquivo": original_name},
                         )
                         cancel_event.set()
-                        # Libera semáforo se cliente desconectou
-                        if semaphore_acquired:
-                            _inference_semaphore.release()
-                            semaphore_acquired = False
-                        # Envia evento de cancelamento para o cliente, se ainda conectado
+                        # NÃO libera semáforo aqui - apenas sinaliza cancelamento
+                        # O semáforo será liberado quando o worker terminar (finally)
                         try:
                             yield (
-                                f"data: {json.dumps({'type': 'cancelled', 'filename': stem}, ensure_ascii=False)}\n\n"
+                                f"data: {json.dumps({{'type': 'cancelled', 'filename': stem}}, ensure_ascii=False)}\n\n"
                             )
                         except Exception:
                             pass
                         break
 
+                    # Non-blocking queue get via asyncio.to_thread
                     try:
-                        item = q.get(timeout=0.5)
-                    except queue.Empty:
+                        item = await asyncio.to_thread(q.get, timeout=0.5)
+                    except RuntimeError:
+                        # Timeout ou erro na thread
                         continue
                     if item is None:
                         break
                     yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
 
-                thread.join(timeout=5.0)
+                # Aguarda worker terminar (já deve ter terminado se chegou aqui)
+                await asyncio.to_thread(thread.join, timeout=5.0)
         finally:
-            # Garante liberação do semáforo em todos os caminhos
+            # Garante liberação do semáforo APENAS após worker terminar
             if semaphore_acquired:
+                # Se worker não terminou, aguarda
+                if not worker_finished.is_set():
+                    await asyncio.to_thread(worker_finished.wait, timeout=30.0)
                 _inference_semaphore.release()
                 semaphore_acquired = False
 

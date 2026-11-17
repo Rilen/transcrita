@@ -518,10 +518,22 @@ class TestWeb(unittest.TestCase):
 
                 future.result()
 
-    @unittest.skip("Timeout test requires semaphore mocking that conflicts with test runner")
     def test_acquisition_timeout_no_inference(self) -> None:
         """Timeout de aquisição sem executar inferência deve retornar 503."""
-        pass
+        # Mock acquire no threading.Semaphore para retornar False (simula timeout)
+        original_acquire = threading.Semaphore.acquire
+        def mock_acquire(self, timeout=None):
+            return False
+        threading.Semaphore.acquire = mock_acquire
+
+        try:
+            files = {"file": ("audio.wav", io.BytesIO(b"fake"), "audio/wav")}
+            data = {"model": "base", "language": "pt", "device": "auto", "compute_type": "default", "beam_size": "5", "vad": "false"}
+            resp = self.client.post("/api/transcribe", files=files, data=data)
+            self.assertEqual(resp.status_code, 503)
+            self.assertIn("ocupado", resp.json()["detail"])
+        finally:
+            threading.Semaphore.acquire = original_acquire
 
     def test_cancel_during_acquisition(self) -> None:
         """Cancelamento durante espera do semáforo não deve vazar semáforo."""
