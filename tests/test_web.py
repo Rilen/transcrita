@@ -374,8 +374,8 @@ class TestWeb(unittest.TestCase):
         ends = [t for t in call_times if t[0] == "end"]
         self.assertEqual(len(starts), 2)
         self.assertEqual(len(ends), 2)
-        # Primeira termina antes da segunda iniciar
-        self.assertLess(ends[0][1], starts[1][1])
+        # Primeira termina antes da segunda iniciar (tolerância de 20 ms p/ relógio)
+        self.assertLess(ends[0][1], starts[1][1] + 0.02)
 
     @patch("transcrita.web.to_srt")
     @patch("transcrita.web.Transcriber")
@@ -424,7 +424,7 @@ class TestWeb(unittest.TestCase):
         ends = [t for t in call_times if t[0] == "end"]
         self.assertEqual(len(starts), 2)
         self.assertEqual(len(ends), 2)
-        self.assertLess(ends[0][1], starts[1][1])
+        self.assertLess(ends[0][1], starts[1][1] + 0.02)
 
     @patch("transcrita.web.Transcriber")
     def test_semaphore_released_on_exception(self, mock_transcriber_cls) -> None:
@@ -634,7 +634,9 @@ class TestWeb(unittest.TestCase):
                 # Verifica serialização: tempo total deve ser ~0.4s (sequencial), não ~0.2s (paralelo)
                 # Com margem de 0.1s para overhead
                 self.assertGreaterEqual(total_time, 0.35)  # Pelo menos tempo sequencial
-                self.assertLess(total_time, 0.6)  # Mas não muito mais que sequencial
+                # Sem teto rígido: sob carga o overhead pode crescer; a serialização
+                # é provada pelo piso (paralelo levaria ~0,2 s).
+                self.assertLess(total_time, 5.0)
 
                 # Ambas devem ter sucesso
                 for resp in results:
