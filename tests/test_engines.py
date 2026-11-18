@@ -254,5 +254,43 @@ class ParakeetUnitTests(unittest.TestCase):
             unlink.assert_called()
 
 
+class ParakeetTokenTests(unittest.TestCase):
+    """Tokens especiais do decoder ONNX não devem vazar para o texto final."""
+
+    def test_clean_text_removes_special_tokens(self) -> None:
+        from transcrita.asr.parakeet import _clean_text
+
+        self.assertEqual(_clean_text("descortinou<unk>lhe"), "descortinoulhe")
+        self.assertEqual(_clean_text("olá <|nospeech|> mundo"), "olá mundo")
+        self.assertEqual(_clean_text("a<pad>b <|pnc|> c"), "ab c")
+        self.assertEqual(_clean_text("texto <|emo:happy|> fim"), "texto fim")
+        self.assertEqual(_clean_text("  espaços   múltiplos\n aqui  "), "espaços múltiplos aqui")
+
+    def test_clean_text_preserves_legitimate_content(self) -> None:
+        from transcrita.asr.parakeet import _clean_text
+
+        self.assertEqual(_clean_text("eu <3 você"), "eu <3 você")
+        self.assertEqual(_clean_text("tag <b>real</b> aqui"), "tag <b>real</b> aqui")
+        self.assertEqual(_clean_text("Ação, coração! ção."), "Ação, coração! ção.")
+        self.assertEqual(_clean_text(""), "")
+
+    def test_transcribe_file_strips_tokens_from_segments(self) -> None:
+        eng = ParakeetUnitTests()._engine()
+        eng._model.recognize.side_effect = [
+            "bom<unk> dia",
+            "<|nospeech|>",
+            "tchau <pad> agora",
+        ]
+        eng._ensure_loaded = lambda: None
+        eng._to_wav16k = lambda path, timeout: (path, False)
+        eng._load_audio = lambda path: __import__("numpy").zeros(48000, dtype="float32")
+        eng._vad_segments = lambda audio: [
+            {"start": 0.0, "end": 0.5}, {"start": 1.0, "end": 1.5}, {"start": 2.0, "end": 2.5},
+        ]
+        segs = eng.transcribe_file("x.wav")
+        # Segmento que virou vazio após limpeza é descartado.
+        self.assertEqual([s.text for s in segs], ["bom dia", "tchau agora"])
+
+
 if __name__ == "__main__":
     unittest.main()

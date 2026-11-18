@@ -39,6 +39,12 @@ class TestWeb(unittest.TestCase):
         self.assertIn("text/html", response.headers.get("content-type", ""))
         self.assertIn("transcrita", response.text)
 
+    def test_get_index_cache_control(self) -> None:
+        """GET / deve enviar Cache-Control: no-cache para evitar HTML obsoleto."""
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("cache-control"), "no-cache")
+
     @patch("transcrita.web.to_srt")
     @patch("transcrita.web.Transcriber")
     def test_post_transcribe_success(self, mock_transcriber_cls, mock_to_srt) -> None:
