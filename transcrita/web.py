@@ -364,7 +364,12 @@ async def index() -> HTMLResponse:
     index_path = _STATIC_DIR / "index.html"
     if not index_path.exists():
         raise HTTPException(status_code=404, detail="interface web não encontrada")
-    return HTMLResponse(index_path.read_text(encoding="utf-8"))
+    # no-cache (must-revalidate) evita HTML obsoleto em cache heurístico do
+    # navegador sem afetar o conteúdo nem o cache de modelos/áudio.
+    return HTMLResponse(
+        index_path.read_text(encoding="utf-8"),
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/api/health")

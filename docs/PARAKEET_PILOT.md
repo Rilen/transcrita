@@ -26,6 +26,20 @@
 - Critérios de aceite: WER ≤ baseline Whisper no mesmo corpus, SRT válido, sem perda textual
   (integridade ≥ 0,99 vs passe integral), estabilidade em 3 repetições.
 
+## Validação do piloto (TRANSCRITA-018/019, 2026-11-18)
+
+- Checkpoint íntegro: SHA-256 do encoder confere com a referência acima.
+- Carga offline (~3 s), RSS ~1,5–2,3 GB, RTF ~0,04 (~25× tempo real) em CPU.
+- WER observado melhor que Whisper small no mesmo corpus
+  (ex.: 0,026–0,121 vs 0,150–0,158 nos clips limpos/ruidosos).
+- Silêncio/VAD: áudio sem fala retorna 0 segmentos (sem alucinação).
+- Sanitização de saída implementada: tokens especiais do decoder
+  (`<unk>`, `<pad>`, `<|...|>`) são removidos antes de gerar texto/SRT/SSE.
+- Ressalva conhecida: `av 19.0.2` é incompatível com `faster-whisper 1.2.1`
+  no caminho `transcribe(caminho)` (kwarg `metadata_errors` removido).
+  Produção não é afetada (decodificação via ffmpeg → numpy); se o caminho
+  por arquivo for necessário, pinar `av<19` ou aguardar correção upstream.
+
 ## Reversão
 - `TRANSCRITA_ENABLE_PARAKEET=false` + restart (imediato).
 - Remover `[parakeet]` do venv do piloto, se necessário; manter `[web]`.

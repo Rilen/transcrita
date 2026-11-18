@@ -10,6 +10,7 @@ from __future__ import annotations
 import gc
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -22,6 +23,17 @@ import soundfile as sf
 from transcrita.core import FFMPEG_TIMEOUT, Segment
 
 logger = logging.getLogger("transcrita.asr.parakeet")
+
+# Tokens de controle do vocab NeMo/Parakeet que não pertencem ao texto final.
+# Cobre <unk>, <pad> e o padrão NeMo <|...|> (ex.: <|nospeech|>, <|pnc|>,
+# <|emo:*|>). Não remove outras sequências entre < e > (ex.: "<3", tags reais).
+_SPECIAL_TOKEN_RE = re.compile(r"<\|[^|]*\|>|<unk>|<pad>")
+
+
+def _clean_text(text: str) -> str:
+    """Remove tokens especiais do decoder e normaliza espaços."""
+    cleaned = _SPECIAL_TOKEN_RE.sub("", text)
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 VAD_CONFIG = {
     "threshold": 0.30,
@@ -163,9 +175,9 @@ class ParakeetEngine:
             end_i = min(len(audio), int(seg["end"] * 16000))
             if end_i - start_i < 1600:  # <100 ms: ruído residual
                 continue
-            text = (self._model.recognize(
+            text = _clean_text(self._model.recognize(
                 audio[start_i:end_i], sample_rate=16000, language=lang, channel=None
-            ) or "").strip()
+            ) or "")
             if not text:
                 continue
             out.append(Segment(start=seg["start"], end=seg["end"], text=text))
