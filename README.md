@@ -1,4 +1,35 @@
-# transcrita
+# Transcrita — Transcrição local de áudio e vídeo
+
+## Visão do projeto / Project overview
+
+**Transcrita** é uma aplicação de transcrição de áudio e vídeo com processamento local, disponível por linha de comando (CLI) e interface web. O projeto permite gerar texto e legendas SRT, configurar modelos de reconhecimento de fala e executar a aplicação em Linux com Python e FFmpeg.
+
+**Problem / Problema:** transformar gravações de áudio e vídeo em texto pesquisável e legendas, oferecendo uma opção de execução local em vez de depender obrigatoriamente de um serviço externo de transcrição.
+
+**Solution / Solução:** CLI em Python e interface web opcional, com processamento por `faster-whisper`, seleção de modelo, idioma e opções de inferência. Há suporte opcional e experimental a Parakeet PT-BR no empacotamento; isso não implica que todos os ambientes estejam configurados com esse motor.
+
+**Engineering / Engenharia:** empacotamento com `pyproject.toml`, dependências opcionais para web e testes, e CI com Python 3.12, FFmpeg e testes automatizados sem download de pesos de modelos.
+
+**Project status / Estado:** código-fonte público; as funcionalidades descritas abaixo constam da documentação e configuração do repositório. Desempenho, precisão e compatibilidade de modelos dependem do hardware e dos arquivos utilizados. Não são apresentados benchmarks ou métricas de produção não verificados.
+
+**English:** Local-first audio/video transcription tool with a Python CLI and optional web interface. Supports plain-text and SRT output, model/language selection and a reproducible Python/FFmpeg setup. The repository includes automated CI checks; no accuracy or performance benchmark is claimed here.
+
+### Demonstração reproduzível / Reproducible demo
+
+A demonstração abaixo usa um arquivo de áudio **fornecido pelo próprio usuário** (não inclui dados reais nem exige publicar gravações):
+
+```bash
+git clone https://github.com/Rilen/transcrita.git
+cd transcrita
+python -m pip install -e ".[web]"
+transcrita exemplo.wav -l pt -o transcricao.txt -s legendas.srt
+```
+
+Para a interface web, execute `transcrita-web` e abra `http://127.0.0.1:8765/`. A primeira execução pode precisar obter os pesos do modelo selecionado. Veja os requisitos e parâmetros nas seções seguintes.
+
+**Portfolio evidence / Evidências:** [código-fonte](https://github.com/Rilen/transcrita) · [configuração de pacote](pyproject.toml) · [workflow de CI](.github/workflows/ci.yml). Capturas de tela e resultados de teste devem ser adicionados apenas após captura e validação, sem dados pessoais.
+
+---
 
 CLI para transcrição local de áudio e vídeo em português usando [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
 
