@@ -35,5 +35,6 @@ Thumbs.db
 # TRANSCRITA-003 PoC (ambientes e artefatos locais)
 .venv-poc/
 .venv-qwen/
+.venv-piper/
 __pycache__/
 *.pyc

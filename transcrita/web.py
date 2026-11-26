@@ -19,7 +19,8 @@ from typing import Optional
 import asyncio
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 from transcrita import __version__
@@ -32,6 +33,14 @@ from transcrita.asr import (
     parakeet_enabled,
     parakeet_weights_path,
 )
+from transcrita.tts import (
+    DEFAULT_VOICE_ID,
+    list_voices_payload,
+    max_tts_chars,
+    tts_enabled,
+    voice_availability,
+)
+from transcrita.tts.piper import PiperTTS, PiperTTSError
 
 logger = logging.getLogger("transcrita.web")
 
@@ -382,6 +391,89 @@ async def health() -> JSONResponse:
 async def engines() -> JSONResponse:
     """Lista motores, modelos, disponibilidade e limitações."""
     return JSONResponse({"engines": list_engines()})
+
+
+class SynthesizeRequest(BaseModel):
+    text: str
+    voice: str = DEFAULT_VOICE_ID
+    speed: float = 1.0
+
+
+@app.get("/api/tts/voices")
+async def tts_voices() -> JSONResponse:
+    """Lista vozes pt-BR disponíveis para o motor Piper TTS."""
+    return JSONResponse({
+        "enabled": tts_enabled(),
+        "default_voice": DEFAULT_VOICE_ID,
+        "voices": list_voices_payload(),
+    })
+
+
+@app.post("/api/tts/synthesize")
+async def tts_synthesize(body: SynthesizeRequest) -> Response:
+    """Sintetiza texto em áudio WAV PCM via Piper TTS local."""
+    if not tts_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="Módulo TTS desabilitado neste ambiente (configure TRANSCRITA_ENABLE_TTS=true)",
+        )
+
+    text = (body.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Texto não fornecido para síntese")
+
+    max_chars = max_tts_chars()
+    if len(text) > max_chars:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Texto excede o limite máximo permitido de {max_chars} caracteres",
+        )
+
+    avail, reason = voice_availability(body.voice)
+    if not avail:
+        raise HTTPException(status_code=400, detail=reason)
+
+    if not (0.5 <= body.speed <= 2.0):
+        raise HTTPException(
+            status_code=400,
+            detail="Velocidade fora dos limites permitidos (deve ser entre 0.5 e 2.0)",
+        )
+
+    # Serialização global com o mesmo semáforo de inferência do ASR
+    acquired = await _acquire_inference_slot(timeout=60)
+    if not acquired:
+        raise HTTPException(
+            status_code=503,
+            detail="Servidor ocupado processando outra inferência, tente novamente em instantes",
+        )
+
+    try:
+        piper = PiperTTS()
+        wav_bytes = await run_in_threadpool(
+            piper.synthesize,
+            text=text,
+            voice=body.voice,
+            speed=body.speed,
+        )
+        return Response(
+            content=wav_bytes,
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": f'attachment; filename="sintese_{body.voice}.wav"',
+                "Cache-Control": "no-cache",
+            },
+        )
+    except TimeoutError as te:
+        logger.error("tts_timeout_error", extra={"voice": body.voice, "err": str(te)})
+        raise HTTPException(status_code=504, detail="Tempo limite esgotado durante a síntese")
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as exc:
+        sanitized = _sanitize_error(exc)
+        logger.error("tts_synthesis_error", extra={"err": sanitized})
+        raise HTTPException(status_code=500, detail=f"Erro na síntese: {sanitized}")
+    finally:
+        _inference_semaphore.release()
 
 
 @app.post("/api/transcribe")

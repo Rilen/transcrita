@@ -167,11 +167,11 @@ handle_path /transcrita/* {
 }
 ```
 
-A interface permite:
-- Arraste e solte ou selecione um arquivo de áudio/vídeo.
-- Escolha modelo, idioma, beam size e opcionalmente ative VAD.
-- Transcreva e visualize o resultado em abas (Texto / SRT).
-- Copie o conteúdo ou baixe os arquivos `.txt` e `.srt`.
+A interface web disponibiliza duas modalidades operacionais em abas independentes:
+- **Aba 1 (Áudio/Vídeo para Texto):** Transcrição via Whisper ou Parakeet PT-BR, fila de arquivos, streaming de progresso SSE, visualização de segmentos e exportação de `.txt` e `.srt`.
+- **Aba 2 (Texto para Áudio):** Síntese neural local via Piper TTS em português do Brasil (vozes `pt_BR-faber-medium` e `pt_BR-edresson-low`), controle de velocidade (0.5x a 2.0x), player nativo HTML5, download de áudio WAV e histórico de sínteses da sessão.
+
+Para detalhes completos de arquitetura, limites, instalação e governança do Piper TTS, consulte [docs/PIPER_TTS.md](docs/PIPER_TTS.md).
 
 ## Exemplos
 
