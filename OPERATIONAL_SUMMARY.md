@@ -1,13 +1,10 @@
-# TRANSCRITA-025 — Consolidação Documental e Encerramento Operacional
+# TRANSCRITA-025/026 — Estado operacional reportado
 
-## SHA Operacional Reportado
-- **SHA:** `c40c0b30d2d0318cdf8b68d36d80974f93a7080e`
-- **Branch:** `main` (HEAD detached at canonical main)
-- **Data:** 26/11/2026
-- **Deploy:** `transcrita.service` ativo em `10.0.1.1:18765`
+Em 26/11/2026, o agente local reportou recuperação do serviço no commit `c40c0b30d2d0318cdf8b68d36d80974f93a7080e` (HEAD destacado, não branch main). O usuário confirmou acesso pelo navegador após o incidente HTTP 502.
 
-## Condição Detached HEAD
-- O checkout operacional foi alinhado à main canônica `c40c0b3`
-- Branch `feat/transcrita-022-piper-tts` mantida no repositório remoto para referência
-- Nenhuma alteração local não pública permanece no checkout operacional
-- Alterações documentais isoladas em worktree `docs/transcrita-025-operational-consolidation`
+- Backend: 10.99.0.1:18765; acesso pela rede institucional via gateway.
+- Ambientes ASR e Piper reconstruídos; 113 testes aprovados segundo o agente.
+- A confirmação do usuário estabelece disponibilidade, não homologação exaustiva de cada função.
+- Ver [incidente e rede](IP_DOCUMENTATION.md), [evidências](TESTS_EVIDENCE.md) e [recuperação](ROLLBACK_DOCUMENTATION.md).
+
+A documentação não implica nova implantação. O coordenador não tem acesso direto ao servidor.
