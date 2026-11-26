@@ -4,6 +4,11 @@ Todas as mudanças notáveis deste projeto são documentadas aqui.
 
 ## [Unreleased]
 
+### Correção de cópia do texto transcrito (missão 021, branch `fix/transcrita-021-clipboard`)
+
+- **Correção:** suporte a cópia de texto em conexões HTTP sobre IP privado (`http://10.0.0.88:3005/transcrita/`), onde `navigator.clipboard` é indisponível por restrição de contexto seguro do navegador (Secure Context).
+- **Fallback:** implementada estratégia resiliente com `document.execCommand('copy')` via elemento temporário selecionável com preservação integral de texto, quebras de linha e acentuação UTF-8, restauração do foco/seleção e feedback de sucesso condicionado à efetiva cópia. Em caso de bloqueio duplo do navegador, o texto é selecionado com instrução ao usuário para atalho do teclado (Ctrl+C).
+
 ### Preparação Parakeet PT-BR (missão 019, branch `fix/transcrita-019-parakeet-readiness`)
 
 - **Correção:** tokens especiais do decoder ONNX (`<unk>`, `<pad>` e padrão

@@ -1622,14 +1622,95 @@
     userEdited = true;
   });
 
-  // Copiar texto filtrado
-  copyBtn.addEventListener('click', () => {
-    const content = outputText.textContent;
-    navigator.clipboard.writeText(content).then(() => {
-      const original = copyBtn.textContent;
+  // Cópia para área de transferência compatível com HTTP (IP privado) e HTTPS
+  async function copyTextToClipboard(text) {
+    if (!text) return false;
+
+    // 1. Tenta Clipboard API moderna quando disponível (requer contexto seguro)
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (e) {
+        // Falha por contexto inseguro (HTTP) ou permissão negada: segue para fallback
+      }
+    }
+
+    // 2. Fallback: elemento textarea temporário com document.execCommand('copy')
+    let success = false;
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.setAttribute('readonly', '');
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-9999px';
+    textArea.style.top = '0';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+
+    const selection = document.getSelection();
+    const originalRange = (selection && selection.rangeCount > 0)
+      ? selection.getRangeAt(0)
+      : null;
+
+    document.body.appendChild(textArea);
+
+    try {
+      textArea.focus();
+      textArea.select();
+      textArea.setSelectionRange(0, textArea.value.length);
+      success = document.execCommand('copy');
+    } catch (e) {
+      success = false;
+    } finally {
+      document.body.removeChild(textArea);
+      if (originalRange && selection) {
+        selection.removeAllRanges();
+        selection.addRange(originalRange);
+      }
+    }
+
+    return success;
+  }
+
+  // Copiar texto filtrado (Clipboard API -> execCommand -> seleção manual)
+  copyBtn.addEventListener('click', async () => {
+    const content = (userEdited && outputText.innerText)
+      ? outputText.innerText
+      : (outputText.textContent || '');
+
+    if (!content.trim()) return;
+
+    const originalText = copyBtn.textContent;
+    const copied = await copyTextToClipboard(content);
+
+    if (copied) {
       copyBtn.textContent = 'Copiado!';
-      setTimeout(() => { copyBtn.textContent = original; }, 2000);
-    });
+      setTimeout(() => {
+        copyBtn.textContent = originalText;
+      }, 2000);
+    } else {
+      // 3. Fallback final: seleciona o texto no elemento e orienta o usuário
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(outputText);
+        const sel = window.getSelection();
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+        outputText.focus();
+      } catch (e) {}
+
+      copyBtn.textContent = 'Pressione Ctrl+C';
+      setTimeout(() => {
+        copyBtn.textContent = originalText;
+      }, 3500);
+    }
   });
 
   // Baixar item individual
