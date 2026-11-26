@@ -4,6 +4,11 @@ Todas as mudanças notáveis deste projeto são documentadas aqui.
 
 ## [Unreleased]
 
+### Recuperação operacional — TRANSCRITA-026
+
+- Reconstrução dos runtimes ASR e Piper, restauração do bind dedicado e recuperação do acesso institucional reportadas pelo agente; acesso confirmado pelo usuário.
+- [Registro do incidente](IP_DOCUMENTATION.md), [recuperação](ROLLBACK_DOCUMENTATION.md) e [limites das evidências](TESTS_EVIDENCE.md). Nenhuma alteração funcional nesta consolidação documental.
+
 ### Integração do Piper TTS local (missão 022, branch `feat/transcrita-022-piper-tts`)
 
 - **Funcionalidade:** adição de síntese neural de fala local (Texto para Áudio — TTS) utilizando o motor Piper mantido pela Open Home Foundation (`OHF-Voice/piper1-gpl`).
@@ -53,10 +58,5 @@ Todas as mudanças notáveis deste projeto são documentadas aqui.
 
 ### Pendências conhecidas (backlog TRANSCRITA-016+)
 
-- Logs `INFO` de `transcrita.web`/`transcrita.core` não chegam ao journald
-  (ausência de `logging.basicConfig`/`dictConfig`; uvicorn só configure seus
-  próprios loggers) — telemetria terminal SSE implementada mas invisível em
-  produção.
 - Endpoint `/api/health` minimalista (sem versão/SHA).
-- UI não expõe exportação SRT (API já retorna `srt`).
 - Sem autenticação nos endpoints (ver TRANSCRITA-014, risco P1).

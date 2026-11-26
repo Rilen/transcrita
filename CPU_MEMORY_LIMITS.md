@@ -1,0 +1,3 @@
+# Recursos — TRANSCRITA-025/026
+
+Limites systemd reportados: MemoryMax=8G, CPUQuota=400%. Após recuperação, o agente reportou memória 46,6 MB e CPU acumulada 3,912 s. Esses valores são instantâneos, não pico sob carga. A homologação Piper anterior reportou RSS isolado ~88 MB e RTF 0,049–0,328 (aproximadamente 3–20 vezes tempo real). Não comparar RSS isolado com memória total do cgroup. Não há evidência suficiente para afirmar ausência de vazamentos ou pico global.
