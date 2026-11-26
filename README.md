@@ -125,47 +125,7 @@ O servidor fica disponível em `http://127.0.0.1:8765/` e o navegador é aberto 
 
 ### Deploy atrás de subpath reverso
 
-Para executar atrás de um proxy reverso (ex: Nginx/Caddy) em um subpath, defina `TRANSCRITA_ROOT_PATH`:
-
-```bash
-# Servidor 10.0.0.88, porta 3005, subpath /transcrita
-TRANSCRITA_HOST=0.0.0.0 TRANSCRITA_PORT=3005 TRANSCRITA_ROOT_PATH=/transcrita ./run.sh
-```
-
-A aplicação ficará disponível em `http://10.0.0.88:3005/transcrita/`.
-
-**Exemplo Nginx** (habilite `proxy_buffering off` para SSE em tempo real):
-
-```nginx
-location /transcrita/ {
-    proxy_pass http://127.0.0.1:3005/transcrita/;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_buffering off;
-    proxy_cache off;
-}
-```
-
-**Exemplo Caddy**:
-
-```caddy
-10.0.0.88:3005
-
-handle_path /transcrita/* {
-    reverse_proxy http://127.0.0.1:3005/transcrita* {
-        header_up Host {upstream_hostport}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
-    }
-    header /transcrita/* Cache-Control "no-cache"
-}
-```
+Para a implantação institucional, consulte [arquitetura de gateway e firewall](docs/INFRA_GATEWAY_FIREWALL.md), [incidente 026](IP_DOCUMENTATION.md) e [recuperação](ROLLBACK_DOCUMENTATION.md). Não utilize bind amplo na implantação institucional.
 
 A interface web disponibiliza duas modalidades operacionais em abas independentes:
 - **Aba 1 (Áudio/Vídeo para Texto):** Transcrição via Whisper ou Parakeet PT-BR, fila de arquivos, streaming de progresso SSE, visualização de segmentos e exportação de `.txt` e `.srt`.
@@ -204,3 +164,7 @@ transcrita-web --port 8080
 Áudio: `.wav`, `.mp3`, `.m4a`, `.ogg`, `.flac`, `.aac`
 
 Vídeo: `.mp4`, `.mkv`, `.mov`, `.avi`, `.webm`, `.flv`, `.wmv`, `.m4v`
+
+## Consolidação operacional
+
+[Estado](OPERATIONAL_SUMMARY.md) · [Piper](PIPER_CONFIGURATION.md) · [Modelos](MODEL_CHECKSUMS.md) · [Evidências](TESTS_EVIDENCE.md) · [Recursos](CPU_MEMORY_LIMITS.md).
