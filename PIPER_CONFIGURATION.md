@@ -34,3 +34,4 @@
 - Política de segurança estrita: apenas vozes em pt-BR autorizadas são aceitas
 - Vozes fora da allowlist são rejeitadas com mensagem "Voz 'X' não autorizada pela governança pt-BR"
 - Implementado em `transcrita.tts.voice_availability()` e `transcrita.tts.piper.synthesize()`
+Após o incidente 026, o agente reportou reinstalação de piper-tts e ativação na unit. Versão exata instalada e configuração efetiva ainda requerem evidência local. Ver IP_DOCUMENTATION.md.
