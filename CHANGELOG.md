@@ -4,6 +4,15 @@ Todas as mudanças notáveis deste projeto são documentadas aqui.
 
 ## [Unreleased]
 
+### Integração do Piper TTS local (missão 022, branch `feat/transcrita-022-piper-tts`)
+
+- **Funcionalidade:** adição de síntese neural de fala local (Texto para Áudio — TTS) utilizando o motor Piper mantido pela Open Home Foundation (`OHF-Voice/piper1-gpl`).
+- **Governança de Vozes pt-BR:** allowlist estrita em Português do Brasil com voz principal `pt_BR-faber-medium` (CC0, 22.050 Hz) e secundária `pt_BR-edresson-low` (CC-BY-4.0, 16.000 Hz) armazenadas em `/var/lib/transcrita/models/piper/pt_BR/`. Rejeição sumária de vozes não autorizadas ou estrangeiras.
+- **Isolamento de Ambiente e Hardware:** runtime ONNX e motor Piper instalados em venv dedicado (`/opt/transcrita/.venv-piper`), preservando a Constituição do projeto (`.kilorules`). Síntese executada em subprocesso sem `shell=True`, compartilhando o semáforo global de inferência (`_inference_semaphore`) com o ASR para cumprimento dos limites de `MemoryMax=8G` e `CPUQuota=400%`.
+- **API:** endpoints `GET /api/tts/voices` e `POST /api/tts/synthesize` sob `root_path=/transcrita`, com validação de entrada, teto de 10.000 caracteres, timeout configurável e serialização de fila.
+- **Interface Web:** reorganização da interface em duas abas (`Áudio/Vídeo para Texto` e `Texto para Áudio`) com suporte a ARIA tabs e atalhos de teclado, slider de velocidade (0.5x–2.0x), player nativo HTML5, download de áudio WAV e histórico de sínteses da sessão.
+- **Homologação:** validado em CPU com RTF entre 0,039 e 0,248 (~4x a 25x mais rápido que tempo real), consumo de RSS de ~398 MB e integridade de acentuação, números, siglas e valores monetários.
+
 ### Preparação Parakeet PT-BR (missão 019, branch `fix/transcrita-019-parakeet-readiness`)
 
 - **Correção:** tokens especiais do decoder ONNX (`<unk>`, `<pad>` e padrão

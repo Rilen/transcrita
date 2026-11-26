@@ -828,6 +828,57 @@
       width: 100%;
     }
   }
+
+  /* ====================== Abas de Navegação e TTS ====================== */
+  .app-tabs-nav {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .tabs-container {
+    display: flex;
+    gap: 8px;
+  }
+  .tab-button {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--muted);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    padding: 10px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    border-radius: 6px 6px 0 0;
+  }
+  .tab-button:hover {
+    color: var(--fg);
+    background: var(--pending-bg);
+  }
+  .tab-button.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+  }
+  .tab-button:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: -2px;
+  }
+  .tab-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .tab-panel[hidden] {
+    display: none !important;
+  }
 </style>
 </head>
 <body>
@@ -844,7 +895,7 @@
     </div>
     <div class="brand-text">
       <h1>transcrita</h1>
-      <p>Transcrição local de áudio e vídeo em português</p>
+      <p>Processamento local de fala em português (ASR &amp; TTS)</p>
     </div>
   </div>
   <button type="button" class="theme-toggle" id="themeToggle" aria-label="Alternar tema">
@@ -853,6 +904,20 @@
   </button>
 </div>
 
+<nav class="app-tabs-nav" aria-label="Navegação entre módulos">
+  <div class="tabs-container" role="tablist">
+    <button type="button" class="tab-button active" id="tabBtnAsr" role="tab" aria-selected="true" aria-controls="tabPanelAsr">
+      <span class="tab-icon">🎙️</span>
+      <span>Áudio/Vídeo para Texto</span>
+    </button>
+    <button type="button" class="tab-button" id="tabBtnTts" role="tab" aria-selected="false" aria-controls="tabPanelTts">
+      <span class="tab-icon">🔊</span>
+      <span>Texto para Áudio</span>
+    </button>
+  </div>
+</nav>
+
+<div id="tabPanelAsr" role="tabpanel" aria-labelledby="tabBtnAsr" class="tab-panel active">
 <div class="app-workspace">
   <!-- Coluna 1 — Sidebar Esquerda: Configurações -->
   <aside class="sidebar-left">
@@ -975,6 +1040,109 @@
 
     <div class="queue-list" id="queueList"></div>
   </aside>
+</div>
+</div> <!-- fim #tabPanelAsr -->
+
+<!-- Painel da Aba 2: Texto para Áudio (Piper TTS) -->
+<div id="tabPanelTts" role="tabpanel" aria-labelledby="tabBtnTts" class="tab-panel" hidden>
+  <div class="app-workspace">
+    <!-- Coluna 1 — Sidebar Esquerda: Configurações TTS -->
+    <aside class="sidebar-left">
+      <div class="sidebar-panel">
+        <h3>⚙️ Motor Piper TTS</h3>
+        <div class="settings-card">
+          <div class="field">
+            <span class="badge" style="display:inline-block;padding:4px 8px;border-radius:6px;background:var(--success-bg);color:var(--success-fg);font-size:0.75rem;font-weight:700;margin-bottom:8px;">Síntese local pt-BR</span>
+            <label for="ttsVoiceSelect">Voz neural</label>
+            <select id="ttsVoiceSelect" aria-describedby="ttsVoiceNote">
+              <option value="pt_BR-faber-medium" selected>Faber (Médio, pt-BR) — Padrão</option>
+              <option value="pt_BR-edresson-low">Edresson (Baixo, pt-BR)</option>
+            </select>
+            <p class="field-note" id="ttsVoiceNote">Qualidade média · 22.050 Hz · Licença CC0</p>
+          </div>
+          <div class="field">
+            <label for="ttsSpeedInput">Velocidade da fala: <strong id="ttsSpeedVal">1.0x</strong></label>
+            <input type="range" id="ttsSpeedInput" min="0.5" max="2.0" step="0.1" value="1.0" style="width:100%;cursor:pointer;">
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--muted);margin-top:4px;">
+              <span>0.5x (Lenta)</span>
+              <span>1.0x (Normal)</span>
+              <span>2.0x (Rápida)</span>
+            </div>
+          </div>
+          <div class="field">
+            <p class="field-note" style="line-height:1.4;">
+              🔒 <strong>Processamento soberano:</strong> síntese executada 100% offline no servidor via motor Piper, sem envio de textos para serviços de terceiros.
+            </p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Coluna 2 — Centro: Texto + Ação + Áudio Sintetizado -->
+    <div class="workspace-center">
+      <div class="transcription-area" style="padding:16px;overflow-y:auto;gap:16px;">
+        <div class="results-card" style="display:flex;flex-direction:column;gap:12px;padding:20px;">
+          <div class="results-header" style="border-bottom:1px solid var(--border);padding-bottom:10px;">
+            <div>
+              <h2 style="font-size:1.1rem;font-weight:700;">Texto para Síntese</h2>
+              <p style="font-size:0.8125rem;color:var(--muted);">Digite ou cole o texto em português para gerar o áudio WAV com entonação natural.</p>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:6px;">
+            <textarea id="ttsTextInput" rows="8" placeholder="Digite ou cole aqui o texto que deseja sintetizar..." style="width:100%;padding:12px;border-radius:var(--radius);border:1px solid var(--border);background:var(--bg);color:var(--fg);font-family:var(--font-ui);font-size:0.9375rem;line-height:1.5;resize:vertical;min-height:160px;" spellcheck="true"></textarea>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div id="ttsCharCount" style="font-size:0.8125rem;color:var(--muted);">0 / 10.000 caracteres</div>
+            <div style="display:flex;gap:10px;">
+              <button type="button" class="btn" id="ttsClearBtn">Limpar</button>
+              <button type="button" class="btn primary btn-transcribe" id="ttsSynthesizeBtn">Gerar áudio</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card de progresso TTS -->
+        <div class="progress-card" id="ttsProgressCard" style="display:none;">
+          <div class="spinner"></div>
+          <div style="font-weight:600;font-size:0.9375rem;">Sintetizando áudio localmente via Piper TTS...</div>
+          <div style="font-size:0.8125rem;color:var(--muted);">Processando texto e gerando forma de onda WAV.</div>
+        </div>
+
+        <!-- Card de erro TTS -->
+        <div class="error" id="ttsErrorCard" style="display:none;">
+          <span id="ttsErrorMessage"></span>
+        </div>
+
+        <!-- Card de resultado TTS -->
+        <div class="results-card" id="ttsResultCard" style="display:none;flex-direction:column;gap:16px;padding:20px;">
+          <div class="results-header" style="border-bottom:1px solid var(--border);padding-bottom:10px;">
+            <div>
+              <h3 style="font-size:1.05rem;font-weight:700;">Áudio Sintetizado</h3>
+              <span id="ttsResultMeta" style="font-size:0.8125rem;color:var(--muted);display:block;">Voz: Faber</span>
+            </div>
+            <div class="results-actions">
+              <button type="button" class="btn primary" id="ttsDownloadBtn">Baixar .wav</button>
+            </div>
+          </div>
+          <audio id="ttsAudioPlayer" controls style="width:100%;outline:none;border-radius:8px;"></audio>
+        </div>
+      </div>
+    </div>
+
+    <!-- Coluna 3 — Sidebar Direita: Histórico de sínteses da sessão -->
+    <aside class="sidebar-right">
+      <div class="sidebar-panel">
+        <h3>📋 Sínteses da Sessão (<span id="ttsHistoryCount">0</span>)</h3>
+        <div class="queue-list" id="ttsHistoryList" style="overflow-y:auto;flex:1;padding:12px;gap:8px;display:flex;flex-direction:column;">
+          <div class="empty-state" id="ttsHistoryEmpty" style="padding:24px 12px;text-align:center;">
+            <span>🔊</span>
+            <span style="font-size:0.8125rem;color:var(--muted);">Nenhum áudio gerado nesta sessão ainda.</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
 </div>
 
 <footer class="app-footer">
@@ -1646,7 +1814,7 @@
   });
 
   function downloadBlob(content, filename, mime) {
-    const blob = new Blob([content], { type: mime });
+    const blob = (content instanceof Blob) ? content : new Blob([content], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -1655,6 +1823,272 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  // ====================== Navegação entre Abas (ASR / TTS) ======================
+  const tabBtnAsr = document.getElementById('tabBtnAsr');
+  const tabBtnTts = document.getElementById('tabBtnTts');
+  const tabPanelAsr = document.getElementById('tabPanelAsr');
+  const tabPanelTts = document.getElementById('tabPanelTts');
+
+  function switchTab(tabId) {
+    const isAsr = tabId === 'asr';
+    tabBtnAsr.classList.toggle('active', isAsr);
+    tabBtnAsr.setAttribute('aria-selected', isAsr ? 'true' : 'false');
+    tabPanelAsr.classList.toggle('active', isAsr);
+    tabPanelAsr.hidden = !isAsr;
+
+    tabBtnTts.classList.toggle('active', !isAsr);
+    tabBtnTts.setAttribute('aria-selected', !isAsr ? 'true' : 'false');
+    tabPanelTts.classList.toggle('active', !isAsr);
+    tabPanelTts.hidden = isAsr;
+  }
+
+  tabBtnAsr.addEventListener('click', () => {
+    switchTab('asr');
+    if (window.location.hash !== '#asr') history.replaceState(null, '', '#asr');
+  });
+  tabBtnTts.addEventListener('click', () => {
+    switchTab('tts');
+    if (window.location.hash !== '#tts') history.replaceState(null, '', '#tts');
+  });
+
+  if (window.location.hash === '#tts') {
+    switchTab('tts');
+  }
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash === '#tts') switchTab('tts');
+    else if (window.location.hash === '#asr') switchTab('asr');
+  });
+
+  [tabBtnAsr, tabBtnTts].forEach(btn => {
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const target = (btn === tabBtnAsr) ? tabBtnTts : tabBtnAsr;
+        target.focus();
+        target.click();
+      }
+    });
+  });
+
+  // ====================== Módulo TTS (Piper) ======================
+  const ttsVoiceSelect = document.getElementById('ttsVoiceSelect');
+  const ttsVoiceNote = document.getElementById('ttsVoiceNote');
+  const ttsSpeedInput = document.getElementById('ttsSpeedInput');
+  const ttsSpeedVal = document.getElementById('ttsSpeedVal');
+  const ttsTextInput = document.getElementById('ttsTextInput');
+  const ttsCharCount = document.getElementById('ttsCharCount');
+  const ttsClearBtn = document.getElementById('ttsClearBtn');
+  const ttsSynthesizeBtn = document.getElementById('ttsSynthesizeBtn');
+  const ttsProgressCard = document.getElementById('ttsProgressCard');
+  const ttsErrorCard = document.getElementById('ttsErrorCard');
+  const ttsErrorMessage = document.getElementById('ttsErrorMessage');
+  const ttsResultCard = document.getElementById('ttsResultCard');
+  const ttsResultMeta = document.getElementById('ttsResultMeta');
+  const ttsAudioPlayer = document.getElementById('ttsAudioPlayer');
+  const ttsDownloadBtn = document.getElementById('ttsDownloadBtn');
+  const ttsHistoryList = document.getElementById('ttsHistoryList');
+  const ttsHistoryEmpty = document.getElementById('ttsHistoryEmpty');
+  const ttsHistoryCount = document.getElementById('ttsHistoryCount');
+
+  let ttsVoicesCache = [];
+  let ttsCurrentBlob = null;
+  let ttsCurrentBlobUrl = null;
+  let ttsSessionItems = [];
+
+  ttsSpeedInput.addEventListener('input', () => {
+    ttsSpeedVal.textContent = parseFloat(ttsSpeedInput.value).toFixed(1) + 'x';
+  });
+
+  ttsTextInput.addEventListener('input', () => {
+    const len = ttsTextInput.value.length;
+    ttsCharCount.textContent = `${len.toLocaleString('pt-BR')} / 10.000 caracteres`;
+    if (len > 10000) {
+      ttsCharCount.style.color = 'var(--danger)';
+      ttsSynthesizeBtn.disabled = true;
+    } else {
+      ttsCharCount.style.color = 'var(--muted)';
+      ttsSynthesizeBtn.disabled = false;
+    }
+  });
+
+  ttsClearBtn.addEventListener('click', () => {
+    ttsTextInput.value = '';
+    ttsCharCount.textContent = '0 / 10.000 caracteres';
+    ttsCharCount.style.color = 'var(--muted)';
+    ttsTextInput.focus();
+  });
+
+  async function loadTtsVoices() {
+    try {
+      const resp = await fetch('api/tts/voices');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      ttsVoicesCache = data.voices || [];
+
+      if (!data.enabled) {
+        ttsVoiceNote.textContent = 'Motor TTS desabilitado neste ambiente (TRANSCRITA_ENABLE_TTS=false).';
+        ttsVoiceNote.style.color = 'var(--amber)';
+        ttsSynthesizeBtn.disabled = true;
+        ttsSynthesizeBtn.title = 'TTS desabilitado administrativamente';
+        return;
+      }
+
+      if (ttsVoicesCache.length > 0) {
+        ttsVoiceSelect.innerHTML = ttsVoicesCache.map(v => {
+          const disabledAttr = !v.available ? 'disabled' : '';
+          const statusText = !v.available ? ' (Indisponível)' : (v.default ? ' — Padrão' : '');
+          return `<option value="${v.id}" ${v.default ? 'selected' : ''} ${disabledAttr}>${v.name}${statusText}</option>`;
+        }).join('');
+        updateVoiceNote();
+      }
+    } catch (e) {
+      /* Mantém opções estáticas */
+    }
+  }
+
+  function updateVoiceNote() {
+    const vId = ttsVoiceSelect.value;
+    const v = ttsVoicesCache.find(item => item.id === vId);
+    if (v) {
+      if (!v.available) {
+        ttsVoiceNote.textContent = `Indisponível: ${v.unavailable_reason || 'modelo não encontrado'}`;
+        ttsVoiceNote.style.color = 'var(--danger)';
+      } else {
+        ttsVoiceNote.textContent = `Qualidade ${v.quality || 'média'} · ${v.sample_rate?.toLocaleString('pt-BR') || 22050} Hz · Licença ${v.license || 'CC0'}`;
+        ttsVoiceNote.style.color = 'var(--muted)';
+      }
+    }
+  }
+
+  ttsVoiceSelect.addEventListener('change', updateVoiceNote);
+  loadTtsVoices();
+
+  ttsSynthesizeBtn.addEventListener('click', async () => {
+    const text = ttsTextInput.value.trim();
+    if (!text) {
+      ttsErrorMessage.textContent = 'Digite algum texto em português antes de gerar o áudio.';
+      ttsErrorCard.style.display = 'flex';
+      ttsTextInput.focus();
+      return;
+    }
+
+    ttsErrorCard.style.display = 'none';
+    ttsProgressCard.style.display = 'flex';
+    ttsSynthesizeBtn.disabled = true;
+
+    const voice = ttsVoiceSelect.value;
+    const speed = parseFloat(ttsSpeedInput.value) || 1.0;
+    const startReq = performance.now();
+
+    try {
+      const resp = await fetch('api/tts/synthesize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice, speed })
+      });
+
+      if (!resp.ok) {
+        let errDetail = 'Falha na síntese de áudio';
+        try {
+          const errData = await resp.json();
+          if (errData && errData.detail) errDetail = errData.detail;
+        } catch (_) {}
+        throw new Error(errDetail);
+      }
+
+      const blob = await resp.blob();
+      const elapsed = ((performance.now() - startReq) / 1000).toFixed(1);
+      const sizeKb = (blob.size / 1024).toFixed(1);
+
+      if (ttsCurrentBlobUrl) {
+        URL.revokeObjectURL(ttsCurrentBlobUrl);
+      }
+      ttsCurrentBlob = blob;
+      ttsCurrentBlobUrl = URL.createObjectURL(blob);
+
+      ttsAudioPlayer.src = ttsCurrentBlobUrl;
+      ttsAudioPlayer.load();
+
+      const voiceObj = ttsVoicesCache.find(v => v.id === voice);
+      const voiceLabel = voiceObj ? voiceObj.name : voice;
+      ttsResultMeta.textContent = `Voz: ${voiceLabel} · Velocidade: ${speed.toFixed(1)}x · Tamanho: ${sizeKb} KB · Tempo: ${elapsed}s`;
+      ttsResultCard.style.display = 'flex';
+
+      addTtsHistoryItem({
+        id: Date.now(),
+        text: text.length > 60 ? text.slice(0, 57) + '...' : text,
+        voiceLabel,
+        voiceId: voice,
+        speed,
+        blobUrl: ttsCurrentBlobUrl,
+        blob,
+        sizeKb,
+        time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+      });
+    } catch (err) {
+      ttsErrorMessage.textContent = err.message || 'Erro inesperado durante a síntese de áudio';
+      ttsErrorCard.style.display = 'flex';
+    } finally {
+      ttsProgressCard.style.display = 'none';
+      ttsSynthesizeBtn.disabled = false;
+    }
+  });
+
+  ttsDownloadBtn.addEventListener('click', () => {
+    if (!ttsCurrentBlob) return;
+    const voice = ttsVoiceSelect.value;
+    downloadBlob(ttsCurrentBlob, `sintese_${voice}.wav`, 'audio/wav');
+  });
+
+  function addTtsHistoryItem(item) {
+    ttsSessionItems.unshift(item);
+    renderTtsHistory();
+  }
+
+  function renderTtsHistory() {
+    ttsHistoryCount.textContent = ttsSessionItems.length;
+    if (ttsSessionItems.length === 0) {
+      ttsHistoryEmpty.style.display = 'flex';
+      return;
+    }
+    ttsHistoryEmpty.style.display = 'none';
+
+    Array.from(ttsHistoryList.children).forEach(child => {
+      if (child !== ttsHistoryEmpty) ttsHistoryList.removeChild(child);
+    });
+
+    ttsSessionItems.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'queue-item';
+      card.style.cursor = 'default';
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <strong style="font-size:0.8125rem;">${item.voiceLabel} (${item.speed.toFixed(1)}x)</strong>
+          <span style="font-size:0.75rem;color:var(--muted);">${item.time}</span>
+        </div>
+        <div style="font-size:0.8125rem;color:var(--fg);margin-bottom:6px;word-break:break-word;">${item.text}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.75rem;color:var(--muted);">
+          <span>${item.sizeKb} KB</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="btn" style="padding:4px 8px;font-size:0.75rem;" data-action="play">▶️ Ouvir</button>
+            <button type="button" class="btn" style="padding:4px 8px;font-size:0.75rem;" data-action="download">⬇️ .wav</button>
+          </div>
+        </div>
+      `;
+      card.querySelector('[data-action="play"]').addEventListener('click', () => {
+        ttsAudioPlayer.src = item.blobUrl;
+        ttsAudioPlayer.load();
+        ttsAudioPlayer.play();
+        ttsResultMeta.textContent = `Voz: ${item.voiceLabel} · Velocidade: ${item.speed.toFixed(1)}x · Tamanho: ${item.sizeKb} KB`;
+        ttsResultCard.style.display = 'flex';
+      });
+      card.querySelector('[data-action="download"]').addEventListener('click', () => {
+        downloadBlob(item.blob, `sintese_${item.voiceId}.wav`, 'audio/wav');
+      });
+      ttsHistoryList.appendChild(card);
+    });
   }
 
   // Atalho de produtividade: Ctrl+Enter inicia a fila de transcrição
