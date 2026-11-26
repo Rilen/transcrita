@@ -13,7 +13,7 @@
 
 ## Modelos Whisper
 - Modelo `base` em Português do Brasil
-- Tamanho e checksums registrados na suíte de 113 testes (`tests/test_core.py`, `tests/test_engines.py`)
+- Checksums dos pesos Whisper não apresentados; testes automatizados não substituem verificação dos arquivos
 - Utilizado para transcrição de áudio/vídeo via `faster-whisper`
 
 ## Modelos Parakeet (Experimental/Offline)
@@ -25,6 +25,7 @@
 | **Ambiente** | `TRANSCRITA_ENABLE_PARAKEET=true` no systemd |
 
 ## Verificação de Integridade
-- Checksums SHA-256 confirmados via `sha256sum /var/lib/transcrita/models/piper/pt_BR/*.onnx /var/lib/transcrita/models/piper/pt_BR/*.onnx.json`
+- Checksums SHA-256 reportados pelo agente antes do incidente 026 via `sha256sum /var/lib/transcrita/models/piper/pt_BR/*.onnx /var/lib/transcrita/models/piper/pt_BR/*.onnx.json`
 - Modelos Piper validados em homologação 15/15 (homologate_piper.py)
-- Whisper models validados em suíte 113/113 testes canônicos
+- A suíte 113/113 não comprova integridade dos pesos.
+Os hashes acima são registros reportados, não verificados independentemente. Revalidar arquivos e versões após reconstrução; o hash Parakeet refere-se ao encoder, não ao conjunto completo.
