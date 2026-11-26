@@ -102,9 +102,12 @@ class TtsContractAndUnitTests(unittest.TestCase):
 
             mock_run.side_effect = fake_run
 
-            audio = piper.synthesize("Texto para teste", voice="pt_BR-faber-medium", speed=1.2)
-            self.assertTrue(len(audio) > 44)
-            self.assertTrue(audio.startswith(b"RIFF"))
+            with patch("transcrita.tts.voice_availability") as mock_voice_avail:
+                with patch("transcrita.tts.piper_binary_path") as mock_piper_bin:
+                    with patch("transcrita.tts.piper_models_dir") as mock_piper_models:
+                        audio = piper.synthesize("Texto para teste", voice="pt_BR-faber-medium", speed=1.2)
+                        self.assertTrue(len(audio) > 44)
+                        self.assertTrue(audio.startswith(b"RIFF"))
 
 
 class TtsApiEndpointsTests(unittest.TestCase):
