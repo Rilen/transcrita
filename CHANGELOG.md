@@ -13,6 +13,11 @@ Todas as mudanças notáveis deste projeto são documentadas aqui.
 - **Interface Web:** reorganização da interface em duas abas (`Áudio/Vídeo para Texto` e `Texto para Áudio`) com suporte a ARIA tabs e atalhos de teclado, slider de velocidade (0.5x–2.0x), player nativo HTML5, download de áudio WAV e histórico de sínteses da sessão.
 - **Homologação:** validado em CPU com RTF entre 0,039 e 0,248 (~4x a 25x mais rápido que tempo real), consumo de RSS de ~398 MB e integridade de acentuação, números, siglas e valores monetários.
 
+### Correção de cópia do texto transcrito (missão 021, branch `fix/transcrita-021-clipboard`)
+
+- **Correção:** suporte a cópia de texto em conexões HTTP sobre IP privado (`http://10.0.0.88:3005/transcrita/`), onde `navigator.clipboard` é indisponível por restrição de contexto seguro do navegador (Secure Context).
+- **Fallback:** implementada estratégia resiliente com `document.execCommand('copy')` via elemento temporário selecionável com preservação integral de texto, quebras de linha e acentuação UTF-8, restauração do foco/seleção e feedback de sucesso condicionado à efetiva cópia. Em caso de bloqueio duplo do navegador, o texto é selecionado com instrução ao usuário para atalho do teclado (Ctrl+C).
+
 ### Preparação Parakeet PT-BR (missão 019, branch `fix/transcrita-019-parakeet-readiness`)
 
 - **Correção:** tokens especiais do decoder ONNX (`<unk>`, `<pad>` e padrão
