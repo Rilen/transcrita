@@ -133,7 +133,10 @@ class TtsApiEndpointsTests(unittest.TestCase):
             self.assertIn("desabilitado", res.json()["detail"])
 
     def test_synthesize_rejected_unauthorized_voice(self) -> None:
-        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}):
+        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}), \
+        patch("transcrita.tts.voice_availability") as mock_voice_avail, \
+        patch("transcrita.tts.piper_binary_path") as mock_piper_bin, \
+        patch("transcrita.tts.piper_models_dir") as mock_piper_models:
             res = self.client.post(
                 "/api/tts/synthesize",
                 json={"text": "Teste", "voice": "en_US-unknown", "speed": 1.0},
@@ -142,7 +145,10 @@ class TtsApiEndpointsTests(unittest.TestCase):
             self.assertIn("não autorizada", res.json()["detail"])
 
     def test_synthesize_rejected_empty_text(self) -> None:
-        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}):
+        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}), \
+        patch("transcrita.tts.voice_availability") as mock_voice_avail, \
+        patch("transcrita.tts.piper_binary_path") as mock_piper_bin, \
+        patch("transcrita.tts.piper_models_dir") as mock_piper_models:
             res = self.client.post(
                 "/api/tts/synthesize",
                 json={"text": "   ", "voice": "pt_BR-faber-medium", "speed": 1.0},
@@ -151,7 +157,10 @@ class TtsApiEndpointsTests(unittest.TestCase):
             self.assertIn("Texto não fornecido", res.json()["detail"])
 
     def test_synthesize_rejected_invalid_speed(self) -> None:
-        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}):
+        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}), \
+        patch("transcrita.tts.voice_availability") as mock_voice_avail, \
+        patch("transcrita.tts.piper_binary_path") as mock_piper_bin, \
+        patch("transcrita.tts.piper_models_dir") as mock_piper_models:
             res = self.client.post(
                 "/api/tts/synthesize",
                 json={"text": "Teste", "voice": "pt_BR-faber-medium", "speed": 3.5},
@@ -161,7 +170,10 @@ class TtsApiEndpointsTests(unittest.TestCase):
 
     def test_synthesize_success_real_or_mocked(self) -> None:
         """Testa síntese via endpoint com flag ativada."""
-        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}):
+        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}), \
+        patch("transcrita.tts.voice_availability") as mock_voice_avail, \
+        patch("transcrita.tts.piper_binary_path") as mock_piper_bin, \
+        patch("transcrita.tts.piper_models_dir") as mock_piper_models:
             res = self.client.post(
                 "/api/tts/synthesize",
                 json={
@@ -177,7 +189,10 @@ class TtsApiEndpointsTests(unittest.TestCase):
 
     def test_synthesize_serializes_with_asr_semaphore(self) -> None:
         """Garante que requisições TTS simultâneas respeitam a serialização do semáforo."""
-        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}):
+        with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}), \
+        patch("transcrita.tts.voice_availability") as mock_voice_avail, \
+        patch("transcrita.tts.piper_binary_path") as mock_piper_bin, \
+        patch("transcrita.tts.piper_models_dir") as mock_piper_models:
             fake_wav = b"RIFF" + b"\x00" * 40 + b"data" + b"\x00" * 100
             order = []
             lock = threading.Lock()
