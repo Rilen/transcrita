@@ -83,31 +83,27 @@ class TtsContractAndUnitTests(unittest.TestCase):
             self.assertIn("Velocidade", str(ctx.exception))
 
     def test_synthesize_subprocess_arguments_no_shell(self) -> None:
-        """Garante execução segura por lista de argumentos e sem shell=True."""
+        """Garante lista de argumentos e ausência de shell=True mesmo sem Piper no runner."""
         piper = PiperTTS()
-        with patch("subprocess.run") as mock_run:
-            mock_proc = MagicMock()
-            mock_proc.returncode = 0
+        with patch("transcrita.tts.piper.voice_availability", return_value=(True, "")), \
+             patch("transcrita.tts.piper.piper_binary_path", return_value="/mock/piper"), \
+             patch("transcrita.tts.piper.piper_models_dir", return_value=Path("/mock/models")), \
+             patch("transcrita.tts.piper.subprocess.run") as mock_run:
+            mock_proc = MagicMock(returncode=0)
             mock_run.return_value = mock_proc
 
-            # Simula arquivo WAV gerado
             def fake_run(cmd, **kwargs):
                 self.assertIsInstance(cmd, list)
                 self.assertNotIn("shell", kwargs)
-                # Verifica argumento de saída
                 out_idx = cmd.index("-f")
                 out_file = Path(cmd[out_idx + 1])
-                out_file.write_bytes(b"RIFF" + b"\x00" * 40 + b"data" + b"\x00" * 10)
+                out_file.write_bytes(b"RIFF" + b"\\x00" * 40 + b"data" + b"\\x00" * 10)
                 return mock_proc
 
             mock_run.side_effect = fake_run
-
-            with patch("transcrita.tts.voice_availability") as mock_voice_avail:
-                with patch("transcrita.tts.piper_binary_path") as mock_piper_bin:
-                    with patch("transcrita.tts.piper_models_dir") as mock_piper_models:
-                        audio = piper.synthesize("Texto para teste", voice="pt_BR-faber-medium", speed=1.2)
-                        self.assertTrue(len(audio) > 44)
-                        self.assertTrue(audio.startswith(b"RIFF"))
+            audio = piper.synthesize("Texto para teste", voice="pt_BR-faber-medium", speed=1.2)
+            self.assertGreater(len(audio), 44)
+            self.assertTrue(audio.startswith(b"RIFF"))
 
 
 class TtsApiEndpointsTests(unittest.TestCase):
@@ -172,11 +168,11 @@ class TtsApiEndpointsTests(unittest.TestCase):
             self.assertIn("Velocidade", res.json()["detail"])
 
     def test_synthesize_success_real_or_mocked(self) -> None:
-        """Testa síntese via endpoint com flag ativada."""
+        """Testa contrato HTTP/WAV independentemente do binário e dos modelos Piper."""
+        fake_wav = b"RIFF" + b"\\x00" * 40 + b"data" + b"\\x00" * 1000
         with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}), \
-        patch("transcrita.tts.voice_availability") as mock_voice_avail, \
-        patch("transcrita.tts.piper_binary_path") as mock_piper_bin, \
-        patch("transcrita.tts.piper_models_dir") as mock_piper_models:
+             patch("transcrita.web.voice_availability", return_value=(True, "")), \
+             patch("transcrita.web.PiperTTS.synthesize", return_value=fake_wav) as mocked_synthesize:
             res = self.client.post(
                 "/api/tts/synthesize",
                 json={
@@ -185,10 +181,11 @@ class TtsApiEndpointsTests(unittest.TestCase):
                     "speed": 1.0,
                 },
             )
-            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.status_code, 200, res.text)
             self.assertEqual(res.headers.get("content-type"), "audio/wav")
-            self.assertTrue(len(res.content) > 1000)
+            self.assertGreater(len(res.content), 1000)
             self.assertTrue(res.content.startswith(b"RIFF"))
+            mocked_synthesize.assert_called_once()
 
     def test_synthesize_serializes_with_asr_semaphore(self) -> None:
         """Garante que requisições TTS simultâneas respeitam a serialização do semáforo."""
