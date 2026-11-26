@@ -27,7 +27,7 @@ Ran 113 tests in ~6s OK
 | `test_web.py` | 32 | 32 passes (endpoints web, serialização, semáforo, SSE) |
 
 ### Principais testes validados:
-- **Teste de serialização com semáforo ASR/TTS:** `test_synthesize_serializes_with_asr_semaphore` — 2 requisições TTS simultâneas serializadas corretamente via `_inference_semaphore`
+- **Teste de serialização com semáforo TTS/TTS:** `test_synthesize_serializes_with_asr_semaphore` — 2 requisições TTS simultâneas serializadas corretamente via `_inference_semaphore`. **Observação:** este teste usa dois motores TTS simultâneos; a concorrência mista ASR/TTS requer evidência independente, que não foi apresentada neste relatório.
 - **Teste de clipboard HTTP:** `test_preserves_accents_and_newlines_in_node_simulation` — valida fallback em contexto HTTP inseguro
 - **Teste SRT:** `test_srt_valid_in_sync_response` — retorno de legendas SRT no endpoint `/api/transcribe`
 - **Teste de rejeição de voz:** `test_rejection_of_unauthorized_voice` — apenas vozes pt-BR autorizadas
