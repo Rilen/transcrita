@@ -97,7 +97,7 @@ class TtsContractAndUnitTests(unittest.TestCase):
                 self.assertNotIn("shell", kwargs)
                 out_idx = cmd.index("-f")
                 out_file = Path(cmd[out_idx + 1])
-                out_file.write_bytes(b"RIFF" + b"\\x00" * 40 + b"data" + b"\\x00" * 10)
+                out_file.write_bytes(b"RIFF" + b"\x00" * 40 + b"data" + b"\x00" * 10)
                 return mock_proc
 
             mock_run.side_effect = fake_run
@@ -169,7 +169,7 @@ class TtsApiEndpointsTests(unittest.TestCase):
 
     def test_synthesize_success_real_or_mocked(self) -> None:
         """Testa contrato HTTP/WAV independentemente do binário e dos modelos Piper."""
-        fake_wav = b"RIFF" + b"\\x00" * 40 + b"data" + b"\\x00" * 1000
+        fake_wav = b"RIFF" + b"\x00" * 40 + b"data" + b"\x00" * 1000
         with patch.dict(os.environ, {"TRANSCRITA_ENABLE_TTS": "true"}), \
              patch("transcrita.web.voice_availability", return_value=(True, "")), \
              patch("transcrita.web.PiperTTS.synthesize", return_value=fake_wav) as mocked_synthesize:
