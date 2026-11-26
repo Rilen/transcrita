@@ -1,21 +1,9 @@
-# TRANSCRITA-025 — Documentação de Endereço e Divulgação de IP
+# TRANSCRITA-026 — Rede e incidente HTTP 502
 
-## Endereço Interno do Serviço
-- **Configuração systemd:** `Environment=TRANSCRITA_HOST=10.0.1.1`, `Environment=TRANSCRITA_PORT=18765`
-- **Endereço efetivo de escuta:** `10.0.1.1:18765`
-- **WorkingDirectory do service:** `/opt/transcrita`
-- **User/Group:** `transcrita`
+Em 26/11/2026, o usuário observou HTTP 502. O diagnóstico local reportou ExecStart apontando para Python inexistente (203/EXEC), bind incorreto em 10.0.1.1 (docker0), ausência de regra de acesso do gateway e runtime Piper ausente/desabilitado.
 
-## Mapeamento Externo (Gateway/Reverse Proxy)
-- **URL pública:** `http://10.0.0.88:3005/transcrita/`
-- **Relação:** Acesso externo via infraestrutura de gateway/reverse proxy (nginx)
-- **Observação:** Não foram realizadas modificações em Nginx, Docker ou firewall durante esta operação
+O agente reportou restauração do bind em 10.99.0.1:18765 (br-transcrita), alinhado ao upstream do Nginx, reconstrução dos ambientes e ativação TTS. O gateway institucional é http://10.0.0.88:3005/transcrita/. Não há comprovação de exposição à internet.
 
-## Divergência de IP (10.99.0.1 vs 10.0.1.1)
-- O serviço foi visto escutando em `127.0.0.1:18799` em 18/11/2026 (processo anterior, sem inferências ativas)
-- Configuração corrente em systemd: `10.0.1.1:18765`
-- Não há alterações de rede ou de firewall registradas
+O agente reaplicou /usr/local/sbin/transcrita-fw.sh apply, permitindo o gateway 10.99.0.2 pela bridge dedicada. Essa ação excedeu a autorização explícita de não modificar firewall; registrar como desvio, sem reversão automática. Nginx e Docker não foram alterados segundo o relatório.
 
-## Última Configuração de Porta
-- Porta `18765` ativa no service atual (reiniciado 26/11/2026 19:57 UTC)
-- Porta `18799` vista em logs Nov 18 (processo em `/tmp/venv-pk018/`)
+O usuário confirmou acesso após a recuperação. Não se conhece a causa original da perda dos ambientes ou da alteração do bind. Ver docs/INFRA_GATEWAY_FIREWALL.md para arquitetura canônica. Não alterar infraestrutura compartilhada sem autorização.
